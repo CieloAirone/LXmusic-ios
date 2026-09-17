@@ -1,5 +1,18 @@
 name: Build iOS IPA
 on:
+  push:
+    branches: [main, master]
+    tags: ['ios-v*']
+  pull_request:
+    branches: [main, master]
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        required: true
+      run_native_tests:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       run_native_tests:
@@ -19,12 +32,14 @@ jobs:
       NO_FLIPPER: '1'
       RCT_NEW_ARCH_ENABLED: '0'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_ref || github.ref }}
       - name: Select Xcode 16.4
         run: |
           sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
           xcodebuild -version
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: npm
@@ -56,7 +71,7 @@ jobs:
           IOS_SKIP_PREPARE: '1'
         run: bash scripts/ios-build.sh archive
       - name: Upload IPA
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: LXMusic-iOS-unsigned-${{ github.run_number }}
           path: |
@@ -66,7 +81,7 @@ jobs:
           if-no-files-found: error
       - name: Upload build diagnostics
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: iOS-build-logs-${{ github.run_number }}
           path: |

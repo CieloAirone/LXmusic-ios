@@ -1,0 +1,45 @@
+name: Publish iOS Release
+on:
+  workflow_run:
+    workflows: ['Build iOS IPA']
+    types: [completed]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: publish-ios-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    # Publish only successful builds of this repository's main branch, never PR code.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_ID: ${{ github.event.workflow_run.id }}
+      BUILD_NUMBER: ${{ github.event.workflow_run.run_number }}
+      BUILD_SHA: ${{ github.event.workflow_run.head_sha }}
+      BUILD_URL: ${{ github.event.workflow_run.html_url }}
+    steps:
+      - name: Download and verify IPA
+        run: |
+          gh run download "$BUILD_ID" --name "LXMusic-iOS-unsigned-$BUILD_NUMBER" --dir artifact
+          cd artifact
+          sha256sum -c LXMusic-unsigned.ipa.sha256
+          unzip -tq LXMusic-unsigned.ipa
+      - name: Publish development release
+        run: |
+          TAG="ios-build-$BUILD_ID"
+          printf '非官方 iOS 移植开发版。\n\nIPA 未签名，需要自行签名后安装；构建成功不代表已完成真机功能验收。\n\n构建记录：%s\n提交：%s\n' "$BUILD_URL" "$BUILD_SHA" > notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" artifact/LXMusic-unsigned.ipa artifact/LXMusic-unsigned.ipa.sha256 --clobber
+          else
+            gh release create "$TAG" artifact/LXMusic-unsigned.ipa artifact/LXMusic-unsigned.ipa.sha256 \
+              --target "$BUILD_SHA" --title "LX Music iOS build $BUILD_NUMBER" --notes-file notes.md --prerelease
+          fi
+          gh release view "$TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
