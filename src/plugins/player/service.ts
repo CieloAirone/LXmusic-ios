@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
+import { log } from '@/utils/log'
 import TrackPlayer, { State as TPState, Event as TPEvent } from '@/plugins/trackPlayer'
 // import { store } from '@/store'
 // import { action as playerAction, STATUS } from '@/store/modules/player'
@@ -67,7 +68,7 @@ const registerPlaybackService = async() => {
   // })
 
   TrackPlayer.addEventListener(TPEvent.PlaybackError, async(err: any) => {
-    console.log('playback-error', err)
+    log.error('[player native]', String(err.code ?? 'unknown'), String(err.message ?? 'Playback failed').replace(/https?:\/\/[^\s]+/g, '[URL]'))
     global.app_event.error()
     global.app_event.playerError()
   })

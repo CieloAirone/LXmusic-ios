@@ -1,3 +1,4 @@
+import { log } from '@/utils/log'
 import TrackPlayer, { State } from '@/plugins/trackPlayer'
 import BackgroundTimer from 'react-native-background-timer'
 import { defaultUrl } from '@/config'
@@ -189,7 +190,11 @@ export const playMusic = (musicInfo: LX.Player.PlayMusic, url: string, time: num
   const id = actionId = Math.random()
   void playPromise.finally(() => {
     if (id != actionId) return
-    playPromise = handlePlayMusic(musicInfo, url, time)
+    playPromise = handlePlayMusic(musicInfo, url, time).catch((error: Error) => {
+      log.error('[player load]', String(error.message).replace(/https?:\/\/[^\s]+/g, '[URL]'))
+      global.app_event.error()
+      global.app_event.playerError()
+    })
   })
 }
 

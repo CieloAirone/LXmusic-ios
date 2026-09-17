@@ -1,3 +1,4 @@
+import { log as errorLog } from '@/utils/log'
 import { type InitParams, onScriptAction, sendAction, type ResponseParams, type UpdateInfoParams, type RequestParams } from '@/utils/nativeModules/userApi'
 import { log, setUserApiList, setUserApiStatus } from '@/core/userApi'
 import settingState from '@/store/setting/state'
@@ -106,7 +107,7 @@ export default async(setting: LX.AppSetting) => {
                       // console.log(res)
                       return { type, url: res.data.url }
                     }).catch(err => {
-                      console.log(err.message)
+                      errorLog.error('[source musicUrl]', String(err.message).replace(/https?:\/\/[^\s]+/g, '[URL]'))
                       throw err
                     }),
                   }
@@ -134,7 +135,7 @@ export default async(setting: LX.AppSetting) => {
                       // console.log(res)
                       return res.data
                     }).catch(async err => {
-                      console.log(err.message)
+                      errorLog.error('[source lyric]', String(err.message).replace(/https?:\/\/[^\s]+/g, '[URL]'))
                       return Promise.reject(err)
                     }),
                   }
@@ -162,7 +163,7 @@ export default async(setting: LX.AppSetting) => {
                       // console.log(res)
                       return res.data
                     }).catch(async err => {
-                      console.log(err.message)
+                      errorLog.error('[source pic]', String(err.message).replace(/https?:\/\/[^\s]+/g, '[URL]'))
                       return Promise.reject(err)
                     }),
                   }

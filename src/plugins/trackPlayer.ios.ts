@@ -19,7 +19,8 @@ const add = async(input: Track | Track[], index?: number) => {
   const converted = await Promise.all(tracks.map(async track => {
     if (typeof track.url !== 'string' || String(track.id).endsWith('//default')) return track
     const original = track.url
-    const url = await cachedURL(original)
+    // Cache lookup is optional; a filesystem failure must not block streaming.
+    const url = await cachedURL(original).catch(() => original)
     if (url === original) void cacheURL(original, { 'User-Agent': track.userAgent ?? 'Mozilla/5.0', ...track.headers }).catch(error => { console.warn('Audio cache:', error.message) })
     return { ...track, url: url.startsWith('/') ? `file://${url}` : url, headers: { 'User-Agent': track.userAgent ?? 'Mozilla/5.0', ...track.headers } }
   }))

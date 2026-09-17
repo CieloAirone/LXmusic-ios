@@ -225,3 +225,15 @@ test('actual iOS playlist container styles allocate a visible native scroll view
     assert.equal(scroll.getComputedWidth(), 320)
   } finally { parent.freeRecursive() }
 })
+test('iOS playback continues with original URL when optional cache lookup fails', async() => {
+  let added
+  const player = loadTS('src/plugins/trackPlayer.ios.ts', {
+    'react-native-track-player': {add: async tracks => {added=tracks}},
+    'react-native': {NativeModules:{}},
+    './player/ios/cache': {cachedURL:async() => {throw Error('disk unavailable')},cacheURL:async()=>{}},
+  }).default
+  await player.add({id:'music',url:'https://example.com/audio.mp3',userAgent:'LX',headers:{Referer:'https://example.com'}})
+  assert.equal(added[0].url,'https://example.com/audio.mp3')
+  assert.equal(added[0].headers.Referer,'https://example.com')
+  assert.equal(added[0].headers['User-Agent'],'LX')
+})
