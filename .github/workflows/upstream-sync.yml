@@ -17,6 +17,8 @@ jobs:
     outputs:
       changed: ${{ steps.sync.outputs.changed }}
       branch: ${{ steps.sync.outputs.branch }}
+      sha: ${{ steps.sync.outputs.sha }}
+      tag: ${{ steps.sync.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -53,3 +55,26 @@ jobs:
       run_native_tests: true
     permissions:
       contents: read
+
+  publish:
+    needs: [sync, build]
+    if: ${{ always() && needs.build.result == 'success' && needs.sync.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.run_id }}
+      RUN_NUMBER: ${{ github.run_number }}
+      SOURCE_SHA: ${{ needs.sync.outputs.sha }}
+      SOURCE_TAG: ${{ needs.sync.outputs.tag }}
+    steps:
+      - name: Verify and publish updated IPA
+        run: |
+          gh run download "$RUN_ID" --name "LXMusic-iOS-unsigned-$RUN_NUMBER" --dir artifact
+          (cd artifact && sha256sum -c LXMusic-unsigned.ipa.sha256 && unzip -tq LXMusic-unsigned.ipa)
+          TAG="ios-upstream-$SOURCE_TAG-$RUN_ID"
+          printf '自动跟进上游 %s 的非官方 iOS 开发版。\n\nIPA 未签名，安装前需要自行签名。已通过构建和原生测试，尚未经过真机完整验收。\n提交：%s\n' "$SOURCE_TAG" "$SOURCE_SHA" > notes.md
+          gh release create "$TAG" artifact/LXMusic-unsigned.ipa artifact/LXMusic-unsigned.ipa.sha256 --target "$SOURCE_SHA" --title "LX Music iOS upstream $SOURCE_TAG" --notes-file notes.md --prerelease
