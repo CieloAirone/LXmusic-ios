@@ -2,6 +2,12 @@ import { NativeModules } from 'react-native'
 
 const { CryptoModule } = NativeModules
 
+const requireCryptoMethod = (name: string) => {
+  if (typeof CryptoModule?.[name] !== 'function') {
+    throw new Error(`Native crypto method unavailable: ${name}`)
+  }
+}
+
 // export const testRsa = (text: string, key: string) => {
 //   // console.log(sourceFilePath, targetFilePath)
 //   return CryptoModule.testRsa()
@@ -24,6 +30,7 @@ export enum AES_MODE {
 
 export const generateRsaKey = async() => {
   // console.log(sourceFilePath, targetFilePath)
+  requireCryptoMethod('generateRsaKey')
   const key = await CryptoModule.generateRsaKey() as { publicKey: string, privateKey: string }
   return {
     publicKey: `${KEY_PREFIX.publicKeyStart}\n${key.publicKey.trim()}\n${KEY_PREFIX.publicKeyEnd}`,
@@ -33,6 +40,7 @@ export const generateRsaKey = async() => {
 
 export const rsaEncrypt = async(text: string, key: string, padding: RSA_PADDING): Promise<string> => {
   // console.log(sourceFilePath, targetFilePath)
+  requireCryptoMethod('rsaEncrypt')
   return CryptoModule.rsaEncrypt(text, key
     .replace(KEY_PREFIX.publicKeyStart, '')
     .replace(KEY_PREFIX.publicKeyEnd, ''), padding)
@@ -40,6 +48,7 @@ export const rsaEncrypt = async(text: string, key: string, padding: RSA_PADDING)
 
 export const rsaDecrypt = async(text: string, key: string, padding: RSA_PADDING): Promise<string> => {
   // console.log(sourceFilePath, targetFilePath)
+  requireCryptoMethod('rsaDecrypt')
   return CryptoModule.rsaDecrypt(text, key
     .replace(KEY_PREFIX.privateKeyStart, '')
     .replace(KEY_PREFIX.privateKeyEnd, ''), padding)
@@ -47,6 +56,7 @@ export const rsaDecrypt = async(text: string, key: string, padding: RSA_PADDING)
 
 export const rsaEncryptSync = (text: string, key: string, padding: RSA_PADDING): string => {
   // console.log(sourceFilePath, targetFilePath)
+  requireCryptoMethod('rsaEncryptSync')
   return CryptoModule.rsaEncryptSync(text, key
     .replace(KEY_PREFIX.publicKeyStart, '')
     .replace(KEY_PREFIX.publicKeyEnd, ''), padding)
@@ -54,6 +64,7 @@ export const rsaEncryptSync = (text: string, key: string, padding: RSA_PADDING):
 
 export const rsaDecryptSync = (text: string, key: string, padding: RSA_PADDING): string => {
   // console.log(sourceFilePath, targetFilePath)
+  requireCryptoMethod('rsaDecryptSync')
   return CryptoModule.rsaDecryptSync(text, key
     .replace(KEY_PREFIX.privateKeyStart, '')
     .replace(KEY_PREFIX.privateKeyEnd, ''), padding)
@@ -62,21 +73,25 @@ export const rsaDecryptSync = (text: string, key: string, padding: RSA_PADDING):
 
 export const aesEncrypt = async(text: string, key: string, vi: string, mode: AES_MODE): Promise<string> => {
   // console.log(sourceFilePath, targetFilePath)
+  requireCryptoMethod('aesEncrypt')
   return CryptoModule.aesEncrypt(text, key, vi, mode)
 }
 
 export const aesDecrypt = async(text: string, key: string, vi: string, mode: AES_MODE): Promise<string> => {
   // console.log(sourceFilePath, targetFilePath)
+  requireCryptoMethod('aesDecrypt')
   return CryptoModule.aesDecrypt(text, key, vi, mode)
 }
 
 export const aesEncryptSync = (text: string, key: string, vi: string, mode: AES_MODE): string => {
   // console.log(sourceFilePath, targetFilePath)
+  requireCryptoMethod('aesEncryptSync')
   return CryptoModule.aesEncryptSync(text, key, vi, mode)
 }
 
 export const aesDecryptSync = (text: string, key: string, vi: string, mode: AES_MODE): string => {
   // console.log(sourceFilePath, targetFilePath)
+  requireCryptoMethod('aesDecryptSync')
   return CryptoModule.aesDecryptSync(text, key, vi, mode)
 }
 

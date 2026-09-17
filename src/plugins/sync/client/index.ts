@@ -40,7 +40,7 @@ const connectServer = async(host: string, authCode?: string) => {
       case SYNC_CODE.missingAuthCode:
         break
       default:
-        log.r_warn(err.message)
+        log.r_warn('[sync connect]', err)
         break
     }
 

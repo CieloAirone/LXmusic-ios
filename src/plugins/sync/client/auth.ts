@@ -39,14 +39,19 @@ const getServerId = async(urlInfo: LX.Sync.UrlInfo) => request(`${urlInfo.httpPr
   })
 
 const codeAuth = async(urlInfo: LX.Sync.UrlInfo, serverId: string, authCode: string) => {
+  log.info('[auth] derive code key')
   let key = toMD5(authCode).substring(0, 16)
   // const iv = Buffer.from(key.split('').reverse().join('')).toString('base64')
   key = Buffer.from(key).toString('base64')
+  log.info('[auth] generate RSA key')
   let { publicKey, privateKey } = await generateRsaKey()
   publicKey = publicKey.replace(/\n/g, '')
     .replace('-----BEGIN PUBLIC KEY-----', '')
     .replace('-----END PUBLIC KEY-----', '')
-  const msg = aesEncrypt(`${SYNC_CODE.authMsg}\n${publicKey}\n${await getDeviceName()}\nlx_music_mobile`, key)
+  log.info('[auth] get device name')
+  const deviceName = await getDeviceName()
+  log.info('[auth] encrypt code request')
+  const msg = aesEncrypt(`${SYNC_CODE.authMsg}\n${publicKey}\n${deviceName}\nlx_music_mobile`, key)
   // console.log(msg, key)
   return request(`${urlInfo.httpProtocol}//${urlInfo.hostPath}/ah`, { headers: { m: msg } }).then(async({ text, code }) => {
     // console.log(text)
@@ -74,7 +79,10 @@ const codeAuth = async(urlInfo: LX.Sync.UrlInfo, serverId: string, authCode: str
 }
 
 const keyAuth = async(urlInfo: LX.Sync.UrlInfo, keyInfo: LX.Sync.KeyInfo) => {
-  const msg = aesEncrypt(SYNC_CODE.authMsg + await getDeviceName(), keyInfo.key)
+  log.info('[auth] get device name for saved key')
+  const deviceName = await getDeviceName()
+  log.info('[auth] encrypt saved key request')
+  const msg = aesEncrypt(SYNC_CODE.authMsg + deviceName, keyInfo.key)
   return request(`${urlInfo.httpProtocol}//${urlInfo.hostPath}/ah`, { headers: { i: keyInfo.clientId, m: msg } }).then(async({ text, code }) => {
     if (code != 200) throw new Error(SYNC_CODE.authFailed)
 
@@ -100,7 +108,9 @@ const auth = async(urlInfo: LX.Sync.UrlInfo, serverId: string, authCode?: string
 export default async(urlInfo: LX.Sync.UrlInfo, authCode?: string) => {
   console.log('connect: ', urlInfo.href)
   console.log(`${urlInfo.httpProtocol}//${urlInfo.hostPath}/hello`)
+  log.info('[auth] hello')
   if (!await hello(urlInfo)) throw new Error(SYNC_CODE.connectServiceFailed)
+  log.info('[auth] server id')
   const serverId = await getServerId(urlInfo)
   if (!serverId) throw new Error(SYNC_CODE.getServiceIdFailed)
   return auth(urlInfo, serverId, authCode)
