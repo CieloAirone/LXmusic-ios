@@ -161,3 +161,23 @@ test('sync authentication encodes Unicode device names as UTF-8 for the server',
     assert.equal(Buffer.concat([decipher.update(Buffer.from(ciphertext, 'base64')), decipher.final()]).toString('utf8'), text)
   }
 })
+test('iOS Buffer works without JSI Base64 globals, including binary slices and gzip', async() => {
+  const adapter = loadTS('src/utils/base64.ios.js', {'base64-js':require('base64-js')})
+  const exports = {}
+  vm.runInNewContext(fs.readFileSync(require.resolve('@craftzdog/react-native-buffer'), 'utf8'), {
+    exports, navigator:{product:'ReactNative'}, Uint8Array, ArrayBuffer,
+    require: name => name === 'react-native-quick-base64' ? adapter : require(name),
+  })
+  const MobileBuffer = exports.Buffer
+  const bytes = MobileBuffer.from(Array.from({length:256}, (_, i) => i))
+  const slice = bytes.subarray(7, 233)
+  assert.equal(slice.toString('base64'), Buffer.from(slice).toString('base64'))
+  const text = '音乐 🎵 '.repeat(500)
+  assert.equal(MobileBuffer.from(MobileBuffer.from(text).toString('base64'), 'base64').toString(), text)
+  const file = loadTS('src/utils/fs.ios.ts', {
+    'react-native-fs': {}, 'react-native':{NativeModules:{}},
+    '@craftzdog/react-native-buffer':{Buffer:MobileBuffer}, pako:require('pako'),
+  })
+  assert.equal(await file.unGzipString(await file.gzipString(text)), text)
+  assert.equal(adapter.atob(adapter.btoa('\x00\xff')), '\x00\xff')
+})

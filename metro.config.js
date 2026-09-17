@@ -8,6 +8,12 @@ const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config')
  */
 const config = {
   resolver: {
+    resolveRequest(context, moduleName, platform) {
+      if (platform === 'ios' && moduleName === 'react-native-quick-base64') {
+        return { type: 'sourceFile', filePath: require.resolve('./src/utils/base64.ios.js') }
+      }
+      return context.resolveRequest(context, moduleName, platform)
+    },
     extraNodeModules: {
       // crypto: require.resolve('react-native-quick-crypto'),
       // stream: require.resolve('stream-browserify'),
