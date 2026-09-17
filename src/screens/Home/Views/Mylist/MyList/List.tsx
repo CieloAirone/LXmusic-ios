@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from 'react'
-import { View, TouchableOpacity, FlatList, type NativeScrollEvent, type NativeSyntheticEvent, type FlatListProps } from 'react-native'
+import { Platform, View, TouchableOpacity, FlatList, type NativeScrollEvent, type NativeSyntheticEvent, type FlatListProps } from 'react-native'
 
 import { Icon } from '@/components/common/Icon'
 
@@ -119,12 +119,12 @@ export default ({ onShowMenu }: {
     <FlatList
       ref={flatListRef}
       onScroll={handleScroll}
-      style={styles.container}
+      style={[styles.container, Platform.OS === 'ios' && { flex: 1 }]}
       data={allList}
       maxToRenderPerBatch={9}
       // updateCellsBatchingPeriod={80}
       windowSize={9}
-      removeClippedSubviews={true}
+      removeClippedSubviews={Platform.OS === 'android'}
       initialNumToRender={18}
       renderItem={renderItem}
       keyExtractor={getkey}

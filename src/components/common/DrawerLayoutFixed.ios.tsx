@@ -69,7 +69,7 @@ export default forwardRef<DrawerLayoutFixedType, Props>(({
         backgroundColor: drawerBackgroundColor ?? 'white',
         transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [-side * drawerWidth, 0] }) }],
       }}>
-        {renderNavigationView()}
+        <View style={{ flex: 1 }} collapsable={false}>{renderNavigationView()}</View>
       </Animated.View>
     </View> : null}
   </View>
