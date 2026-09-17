@@ -94,7 +94,8 @@
     "eslint-config-standard-with-typescript": "^43.0.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^5.2.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "yoga-layout": "3.2.1"
   },
   "overrides": {
     "@react-native-community/cli-platform-android": {

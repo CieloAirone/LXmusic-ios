@@ -119,7 +119,7 @@ export default ({ onShowMenu }: {
     <FlatList
       ref={flatListRef}
       onScroll={handleScroll}
-      style={[styles.container, Platform.OS === 'ios' && { flex: 1 }]}
+      style={styles.container}
       data={allList}
       maxToRenderPerBatch={9}
       // updateCellsBatchingPeriod={80}
@@ -138,7 +138,8 @@ export default ({ onShowMenu }: {
 const styles = createStyle({
   container: {
     flexShrink: 1,
-    flexGrow: 0,
+    // Explicit flexGrow is required: flex: 1 does not override flexGrow: 0.
+    flexGrow: Platform.OS === 'ios' ? 1 : 0,
   },
   // listContainer: {
   //   // borderBottomWidth: BorderWidths.normal2,

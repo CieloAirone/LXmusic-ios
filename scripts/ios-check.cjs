@@ -196,3 +196,32 @@ test('startup dimensions keep playlist drawer width and row height nonzero befor
     assert.ok(ratio.getTextSize(14) > 0)
   }
 })
+test('actual iOS playlist container styles allocate a visible native scroll viewport', async() => {
+  const {default: Yoga} = await import('yoga-layout')
+  let styles
+  const source = ts.transpileModule(fs.readFileSync('src/screens/Home/Views/Mylist/MyList/List.tsx', 'utf8'), {
+    compilerOptions:{module:ts.ModuleKind.CommonJS, jsx:ts.JsxEmit.ReactJSX},
+  }).outputText
+  vm.runInNewContext(source, {
+    exports:{}, require(name) {
+      if (name === 'react') return {memo: component => component}
+      if (name === 'react-native') return {Platform:{OS:'ios'}}
+      if (name === '@/utils/tools') return {createStyle: value => {styles = value; return value}}
+      if (name === '@/utils/pixelRatio') return {scaleSizeH: value => value}
+      return {}
+    },
+  })
+  const parent = Yoga.Node.create()
+  const scroll = Yoga.Node.create()
+  try {
+    parent.setWidth(320); parent.setHeight(600)
+    if (styles.container.flex != null) scroll.setFlex(styles.container.flex)
+    scroll.setFlexGrow(styles.container.flexGrow)
+    scroll.setFlexShrink(styles.container.flexShrink)
+    scroll.setMeasureFunc(() => ({width:0,height:0}))
+    parent.insertChild(scroll, 0)
+    parent.calculateLayout(320, 600, Yoga.DIRECTION_LTR)
+    assert.equal(scroll.getComputedHeight(), 600)
+    assert.equal(scroll.getComputedWidth(), 320)
+  } finally { parent.freeRecursive() }
+})
