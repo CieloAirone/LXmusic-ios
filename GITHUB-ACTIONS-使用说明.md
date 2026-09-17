@@ -15,3 +15,7 @@
 失败时：在运行页面查看红色步骤，并下载 `iOS-build-logs-运行编号`。如在安装 JS 依赖等早期步骤失败、没有日志产物，复制该步骤末尾的错误输出。原生日志可用于继续修复，而不是重新猜测构建配置。
 
 构建固定使用 macOS 15、Xcode 16.4、Node 20、Ruby 3.2、CocoaPods 1.16.2；若 GitHub 将来移除该 Xcode 版本，需要调整工作流的 Xcode 路径。
+
+## 修复：unknown keyword: quirks_mode
+
+Gemfile 已固定 `json 2.7.2`，避免自动安装不兼容的 JSON 3。安装 Pods 前会执行 Ruby JSON 参数兼容检查，结果保存至构建日志。已有仓库可覆盖 Gemfile、scripts/ios-build.sh 并新增 scripts/check-ruby-json.rb，然后对新提交重新 Run workflow。不要仅重新运行旧提交的失败任务。

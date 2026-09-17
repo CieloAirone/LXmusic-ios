@@ -14,6 +14,7 @@ mkdir -p build/logs
 if [[ "${IOS_SKIP_PREPARE:-0}" != 1 || "$mode" == prepare ]]; then
   if [[ ! -d node_modules ]]; then npm ci --include=dev; fi
   bundle install 2>&1 | tee build/logs/bundle-install.log
+  bundle exec ruby scripts/check-ruby-json.rb 2>&1 | tee build/logs/ruby-json-check.log
   (cd ios && bundle exec pod install) 2>&1 | tee build/logs/pod-install.log
 fi
 if [[ "$mode" == prepare ]]; then exit 0; fi
