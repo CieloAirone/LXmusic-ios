@@ -142,3 +142,22 @@ test('generated native key strings form PEM accepted by the sync server', async(
   assert.equal(crypto.createPublicKey(keys.publicKey).asymmetricKeyType, 'rsa')
   assert.equal(crypto.createPrivateKey(keys.privateKey).asymmetricKeyType, 'rsa')
 })
+test('sync authentication encodes Unicode device names as UTF-8 for the server', () => {
+  const sync = loadTS('src/plugins/sync/utils.ts', {
+    '@craftzdog/react-native-buffer': {Buffer},
+    '@/utils/nativeModules/crypto': {
+      AES_MODE: {ECB_128_NoPadding: 'AES'}, RSA_PADDING: {},
+      aesEncryptSync(data, key, iv, mode) {
+        assert.equal(mode, 'AES')
+        const cipher = crypto.createCipheriv('aes-128-ecb', Buffer.from(key, 'base64'), null)
+        return Buffer.concat([cipher.update(Buffer.from(data, 'base64')), cipher.final()]).toString('base64')
+      },
+    },
+  })
+  const key = Buffer.from('0123456789abcdef').toString('base64')
+  for (const text of ['lx-music connect', 'lx-music auth::小明的 iPhone 🎵', 'lx-music auth::\npublic-key\n小明的 iPhone 🎵\nlx_music_mobile']) {
+    const ciphertext = sync.aesEncrypt(text, key)
+    const decipher = crypto.createDecipheriv('aes-128-ecb', Buffer.from(key, 'base64'), null)
+    assert.equal(Buffer.concat([decipher.update(Buffer.from(ciphertext, 'base64')), decipher.final()]).toString('utf8'), text)
+  }
+})

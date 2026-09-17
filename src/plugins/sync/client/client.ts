@@ -175,6 +175,7 @@ export const connect = (urlInfo: LX.Sync.UrlInfo, keyInfo: LX.Sync.KeyInfo) => {
         client?.send(data)
       }).catch((err) => {
         log.error('encrypt msg error: ', err)
+        sendSyncMessage('Sync send failed')
         client?.close(SYNC_CLOSE_CODE.failed)
       })
     },
@@ -184,6 +185,7 @@ export const connect = (urlInfo: LX.Sync.UrlInfo, keyInfo: LX.Sync.KeyInfo) => {
     onError(error, path, groupName) {
       const name = groupName ?? ''
       log.r_error(`sync call ${name} ${path.join('.')} error:`, error)
+      sendSyncMessage(`Sync call failed: ${name} ${path.join('.')}`)
       // if (groupName == null) return
       // client?.close(SYNC_CLOSE_CODE.failed)
       // sendSyncStatus({
@@ -206,12 +208,14 @@ export const connect = (urlInfo: LX.Sync.UrlInfo, keyInfo: LX.Sync.KeyInfo) => {
           syncData = JSON.parse(data)
         } catch (err) {
           log.error('parse msg error: ', err)
+          sendSyncMessage('Sync response is not valid JSON')
           client?.close(SYNC_CLOSE_CODE.failed)
           return
         }
         message2read.message(syncData)
       }).catch((error) => {
         log.error('decrypt msg error: ', error)
+        sendSyncMessage('Sync response decompression failed')
         client?.close(SYNC_CLOSE_CODE.failed)
       })
     }
@@ -261,7 +265,7 @@ export const connect = (urlInfo: LX.Sync.UrlInfo, keyInfo: LX.Sync.KeyInfo) => {
         if (!status.message || status.message == initMessage) {
           sendSyncStatus({
             status: false,
-            message: 'failed',
+            message: 'Sync closed (4100): check server sync log',
           })
         }
         break
