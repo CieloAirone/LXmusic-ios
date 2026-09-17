@@ -5,7 +5,7 @@
  * width:375
  * height:667
  */
-import { PixelRatio } from 'react-native'
+import { Dimensions, PixelRatio } from 'react-native'
 import { windowSizeTools } from './windowSizeTools'
 
 // 高保真的宽度和高度
@@ -13,7 +13,12 @@ const designWidth = 375.0
 const designHeight = 667.0
 
 // 获取屏幕的dp
-const size = windowSizeTools.getSize()
+const initialSize = windowSizeTools.getSize()
+// This module is imported by tools during startup, before async window init.
+// Never freeze a zero scale into module-level drawer widths and list heights.
+const size = initialSize.width > 0 && initialSize.height > 0
+  ? initialSize
+  : Dimensions.get('window')
 // console.log('size', size)
 let screenW = size.width
 let screenH = size.height

@@ -69,10 +69,10 @@ test('source runtime timer cancellation, request abort and invalid result handli
   assert.equal(env.events.at(-1).data.status, false)
   assert.throws(() => env.run("eval('1')"), /not available/)
 })
-function loadTS(file, modules) {
+function loadTS(file, modules, globals = {}) {
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS, target:ts.ScriptTarget.ES2020, esModuleInterop:true}}).outputText
   const exports = {}
-  vm.runInNewContext(code, { exports, require: name => { if (!(name in modules)) throw new Error('Unexpected import: ' + name); return modules[name] }, console, Buffer })
+  vm.runInNewContext(code, { exports, require: name => { if (!(name in modules)) throw new Error('Unexpected import: ' + name); return modules[name] }, console, Buffer, ...globals })
   return exports
 }
 test('iOS player metadata bridge uses native argument count and keeps title fields', async() => {
@@ -180,4 +180,19 @@ test('iOS Buffer works without JSI Base64 globals, including binary slices and g
   })
   assert.equal(await file.unGzipString(await file.gzipString(text)), text)
   assert.equal(adapter.atob(adapter.btoa('\x00\xff')), '\x00\xff')
+})
+
+test('startup dimensions keep playlist drawer width and row height nonzero before async init', () => {
+  for (const size of [{width:0,height:0}, {width:390,height:844}]) {
+    const ratio = loadTS('src/utils/pixelRatio.ts', {
+      'react-native': {
+        Dimensions: {get: () => ({width:390,height:844})},
+        PixelRatio: {get: () => 3, getFontScale: () => 1, getPixelSizeForLayoutSize: value => value * 3},
+      },
+      './windowSizeTools': {windowSizeTools:{getSize: () => size}},
+    }, {global:{lx:{fontSize:1}}})
+    assert.equal(ratio.scaleSizeW(400), 413)
+    assert.equal(ratio.scaleSizeH(40), 41)
+    assert.ok(ratio.getTextSize(14) > 0)
+  }
 })
