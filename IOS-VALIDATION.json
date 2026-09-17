@@ -1,0 +1,33 @@
+{
+  "status": "development-source-only; native build and feature parity incomplete",
+  "upstream_commit": "cd37a979a5845f1220b306b374285f5d38329e8d",
+  "checks": {
+    "ios_typescript": "passed",
+    "node_tests": 7,
+    "ios_release_js_bundle": "passed",
+    "ios_platform_resolution": "passed",
+    "android_release_js_comparison": "passed",
+    "targeted_adapter_eslint": "passed",
+    "plist_scheme_and_shell_syntax": "passed"
+  },
+  "not_run": [
+    "CocoaPods installation",
+    "Xcode native compile",
+    "native XCTest",
+    "simulator UI",
+    "iPhone functional tests",
+    "signing",
+    "cloud workflow"
+  ],
+  "remaining_features": [
+    "embedded audio tag writeback",
+    "OGG and other codec parity",
+    "persistent external folder access",
+    "device validation of core flows",
+    "UI screenshot comparison"
+  ],
+  "artifacts": {
+    "source": "LXMusic-iOS-source-dev.zip",
+    "installable_ipa": null
+  }
+}

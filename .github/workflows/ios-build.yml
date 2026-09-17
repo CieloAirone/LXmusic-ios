@@ -1,0 +1,82 @@
+name: Build iOS IPA
+on:
+  workflow_dispatch:
+    inputs:
+      run_native_tests:
+        description: '同时运行模拟器原生测试（耗时更长）'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      NO_FLIPPER: '1'
+      RCT_NEW_ARCH_ENABLED: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 16.4
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
+          xcodebuild -version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+      - name: Install JavaScript dependencies
+        run: |
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+          npm ci --include=dev
+      - name: Check iOS code and compatibility tests
+        run: npm run check:ios
+      - name: Verify iOS JavaScript bundle
+        run: npm run bundle:ios
+      - name: Install CocoaPods dependencies
+        run: bash scripts/ios-build.sh prepare
+      - name: Select iPhone simulator
+        if: ${{ inputs.run_native_tests }}
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for k,a in d["devices"].items() if "iOS" in k for v in a if v["name"].startswith("iPhone")))')
+          echo "IOS_TEST_DESTINATION=platform=iOS Simulator,id=$DEVICE_ID" >> "$GITHUB_ENV"
+      - name: Run optional native tests
+        if: ${{ inputs.run_native_tests }}
+        env:
+          IOS_SKIP_PREPARE: '1'
+        run: bash scripts/ios-build.sh test
+      - name: Build unsigned IPA
+        env:
+          IOS_SKIP_PREPARE: '1'
+        run: bash scripts/ios-build.sh archive
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: LXMusic-iOS-unsigned-${{ github.run_number }}
+          path: |
+            build/LXMusic-unsigned.ipa
+            build/LXMusic-unsigned.ipa.sha256
+          retention-days: 14
+          if-no-files-found: error
+      - name: Upload build diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: iOS-build-logs-${{ github.run_number }}
+          path: |
+            build/logs/
+            build/TestResults-*.xcresult
+            ios/Podfile.lock
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Build summary
+        if: ${{ success() }}
+        run: |
+          echo '### IPA 已构建' >> "$GITHUB_STEP_SUMMARY"
+          echo '在本次运行页面的 Artifacts 下载 LXMusic-iOS-unsigned。解压后得到 IPA；它未签名，需要自行签名后安装。' >> "$GITHUB_STEP_SUMMARY"
