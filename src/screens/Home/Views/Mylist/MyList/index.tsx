@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 
 import ListMenu, { type ListMenuType } from './ListMenu'
 import ListNameEdit, { type ListNameEditType } from './ListNameEdit'
@@ -10,7 +11,9 @@ import DuplicateMusic, { type DuplicateMusicType } from './DuplicateMusic'
 
 
 export default () => {
-  const [visible, setVisible] = useState(false)
+  // iOS mounts drawer content after the open event (or a swipe), so it
+  // cannot wait for the event that already caused this component to mount.
+  const [visible, setVisible] = useState(Platform.OS === 'ios')
   const listMenuRef = useRef<ListMenuType>(null)
   const listNameEditRef = useRef<ListNameEditType>(null)
   const listMusicSortRef = useRef<ListMusicSortType>(null)
@@ -18,6 +21,7 @@ export default () => {
   const listImportExportRef = useRef<ListImportExportType>(null)
 
   useEffect(() => {
+    if (Platform.OS === 'ios') return
     let isInited = false
     const changeVisible = (visibleList: boolean) => {
       if (visibleList && !isInited) {
