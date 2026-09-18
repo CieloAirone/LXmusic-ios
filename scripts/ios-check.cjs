@@ -249,3 +249,28 @@ test('track identity comes from native queue even before JS queue bookkeeping ca
   index = null
   assert.equal(await api.getCurrentTrackId(), undefined)
 })
+test('lyric timers ignore callbacks delivered after clear or a new song starts', () => {
+  const source = fs.readFileSync(require.resolve('lrc-file-parser'), 'utf8')
+  const start = source.indexOf('const timeoutTools = {', source.indexOf('const noop'))
+  const end = source.indexOf('\nconst t_rxp_1', start)
+  const frames = [], timers = []
+  let now = 0, calls = 0
+  const context = {getNow:()=>now, noop(){}, window:{requestAnimationFrame:fn=>(frames.push(fn),frames.length),cancelAnimationFrame(){},clearTimeout(){}},setTimeout:fn=>(timers.push(fn),timers.length)}
+  vm.runInNewContext(source.slice(start,end)+';globalThis.timer=Object.create(timeoutTools)',context)
+  const timer = context.timer
+  timer.start(()=>calls++)
+  timer.clear()
+  assert.doesNotThrow(()=>frames.shift()())
+  timer.start(()=>{throw Error('stale song')})
+  timer.start(()=>calls++)
+  frames.shift()()
+  assert.equal(calls,0)
+  frames.shift()()
+  assert.equal(calls,1)
+  timer.start(()=>calls++,1000)
+  frames.shift()()
+  timer.clear();now=2000
+  timers.shift()()
+  assert.equal(frames.length,0)
+  assert.equal(calls,1)
+})

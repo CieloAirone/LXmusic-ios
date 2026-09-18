@@ -25,7 +25,8 @@
     "bundle:ios": "node scripts/ios-bundle.cjs",
     "build:ios:simulator": "bash scripts/ios-build.sh simulator",
     "build:ios:archive": "bash scripts/ios-build.sh archive",
-    "test:ios:native": "bash scripts/ios-build.sh test"
+    "test:ios:native": "bash scripts/ios-build.sh test",
+    "postinstall": "node scripts/patch-lyric-timer.cjs"
   },
   "engines": {
     "node": ">= 18",
