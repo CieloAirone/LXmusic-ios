@@ -113,11 +113,13 @@ export const isTempTrack = (trackId: string) => /\/\/default$/.test(trackId)
 
 export const getCurrentTrackId = async() => {
   const currentTrackIndex = await TrackPlayer.getCurrentTrack()
-  return list[currentTrackIndex]?.id
+  if (currentTrackIndex == null) return undefined
+  return (await TrackPlayer.getTrack(currentTrackIndex))?.id as string | undefined
 }
 export const getCurrentTrack = async() => {
   const currentTrackIndex = await TrackPlayer.getCurrentTrack()
-  return list[currentTrackIndex]
+  if (currentTrackIndex == null) return undefined
+  return await TrackPlayer.getTrack(currentTrackIndex) as LX.Player.Track | undefined
 }
 
 export const updateMetaData = async(musicInfo: LX.Player.MusicInfo, isPlay: boolean, force = false) => {

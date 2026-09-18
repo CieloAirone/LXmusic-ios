@@ -3,10 +3,10 @@ import { log } from '@/utils/log'
 import TrackPlayer, { State as TPState, Event as TPEvent } from '@/plugins/trackPlayer'
 // import { store } from '@/store'
 // import { action as playerAction, STATUS } from '@/store/modules/player'
-import { isTempId, isEmpty } from './utils'
+import { isTempId } from './utils'
 // import { play as lrcPlay, pause as lrcPause } from '@/core/lyric'
 import { exitApp } from '@/core/common'
-import { getCurrentTrackId } from './playList'
+import { getCurrentTrackId, isTempTrack } from './playList'
 import { pause, play, playNext, playPrev } from '@/core/player/player'
 
 let isInitialized = false
@@ -113,12 +113,13 @@ const registerPlaybackService = async() => {
   })
   TrackPlayer.addEventListener(TPEvent.PlaybackTrackChanged, async info => {
     // console.log('PlaybackTrackChanged====>', info)
-    global.lx.playerTrackId = await getCurrentTrackId()
+    global.lx.playerTrackId = (await getCurrentTrackId()) ?? ''
     if (info.track == null) return
     if (global.lx.isPlayedStop) return handleExitApp('Timeout Exit')
 
     // console.log('global.lx.playerTrackId====>', global.lx.playerTrackId)
-    if (isEmpty()) {
+    // Missing/stale queue lookups are not evidence of a completed song.
+    if (global.lx.playerTrackId && isTempTrack(global.lx.playerTrackId)) {
       // console.log('====TEMP PAUSE====')
       await TrackPlayer.pause()
       global.app_event.playerPause()

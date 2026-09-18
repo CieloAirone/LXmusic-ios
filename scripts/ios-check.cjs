@@ -237,3 +237,15 @@ test('iOS playback continues with original URL when optional cache lookup fails'
   assert.equal(added[0].headers.Referer,'https://example.com')
   assert.equal(added[0].headers['User-Agent'],'LX')
 })
+test('track identity comes from native queue even before JS queue bookkeeping catches up', async() => {
+  let index = 0
+  const api = loadTS('src/plugins/player/playList.ts', {
+    '@/plugins/trackPlayer':{getCurrentTrack:async()=>index,getTrack:async()=>({id:'real-song',url:'https://example.com/a.mp3'})},
+    'react-native-background-timer':{}, '@/config':{defaultUrl:1},
+    '@/store/setting/state':{setting:{}}, '@/store/player/state':{}, '@/utils/log':{log:{}},
+  })
+  assert.equal(await api.getCurrentTrackId(), 'real-song')
+  assert.equal((await api.getCurrentTrack()).id, 'real-song')
+  index = null
+  assert.equal(await api.getCurrentTrackId(), undefined)
+})
