@@ -29,7 +29,7 @@ export default () => {
   const getCurrentTime = () => {
     let id = playerState.musicInfo.id
     void getPosition().then(position => {
-      if (!position || id != playerState.musicInfo.id) return
+      if (!Number.isFinite(position) || position < 0 || id != playerState.musicInfo.id) return
       setNowPlayTime(position)
       if (!playerState.isPlay) return
 
@@ -39,7 +39,11 @@ export default () => {
     })
   }
   const getMaxTime = async() => {
-    setMaxplayTime(await getDuration())
+    const id = playerState.musicInfo.id
+    const duration = await getDuration()
+    // AVPlayer may not know duration at the first playing event.
+    if (id !== playerState.musicInfo.id || !Number.isFinite(duration) || duration <= 0) return
+    setMaxplayTime(duration)
 
     if (playerState.playMusicInfo.musicInfo && 'source' in playerState.playMusicInfo.musicInfo && !playerState.playMusicInfo.musicInfo.interval) {
       // console.log(formatPlayTime2(playProgress.maxPlayTime))
@@ -66,6 +70,7 @@ export default () => {
     clearUpdateTimeout()
     updateTimeout = BackgroundTimer.setInterval(() => {
       getCurrentTime()
+      void getMaxTime().catch(() => {})
     }, 1000 / settingState.setting['player.playbackRate'])
     getCurrentTime()
   }

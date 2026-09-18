@@ -274,3 +274,20 @@ test('lyric timers ignore callbacks delivered after clear or a new song starts',
   assert.equal(frames.length,0)
   assert.equal(calls,1)
 })
+test('playback duration retries after native duration becomes available and accepts zero position', async() => {
+  const events = {}, state = {musicInfo:{id:'a'},progress:{},playMusicInfo:{},isPlay:true}
+  let duration=0, interval, maximum, position
+  const api = loadTS('src/core/init/player/playProgress.ts', {
+    '@/core/list':{}, '@/core/player/progress':{setMaxplayTime:v=>maximum=v,setNowPlayTime:v=>position=v},
+    '@/plugins/player':{getDuration:async()=>duration,getPosition:async()=>0},
+    '@/utils/common':{}, '@/utils/data':{}, '@/utils/tools':{throttleBackgroundTimer:fn=>fn},
+    'react-native-background-timer':{setInterval:fn=>(interval=fn,1),clearInterval(){}},
+    '@/store/player/state':state, '@/store/setting/state':{setting:{'player.playbackRate':1}},
+    '@/utils/nativeModules/utils':{onScreenStateChange(){}},'react-native':{AppState:{addEventListener(){}}},
+  },{global:{app_event:{on:(key,fn)=>events[key]=fn},state_event:{on(){}}}})
+  api.default();events.play();await tick()
+  assert.equal(maximum,undefined)
+  assert.equal(position,0)
+  duration=183;interval();await tick()
+  assert.equal(maximum,183)
+})
