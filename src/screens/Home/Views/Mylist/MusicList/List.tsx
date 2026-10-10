@@ -14,6 +14,9 @@ import type { Position } from './ListMenu'
 import type { SelectMode } from './MultipleModeBar'
 import { useActiveListId } from '@/store/list/hook'
 import { useSettingValue } from '@/store/setting/hook'
+import Button from '@/components/common/Button'
+import Text from '@/components/common/Text'
+import { log } from '@/utils/log'
 
 type FlatListType = FlatListProps<LX.Music.MusicInfo>
 
@@ -55,6 +58,8 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
   const [selectedList, setSelectedList] = useState<LX.List.ListMusics>([])
   const selectedListRef = useRef<LX.List.ListMusics>([])
   const currentListIdRef = useRef('')
+  const [loadError, setLoadError] = useState(false)
+  const reloadRef = useRef<() => void>(() => {})
   const waitJumpListPositionRef = useRef(false)
   const rowInfo = useRef(getRowInfo())
   const isShowAlbumName = useSettingValue('list.isShowAlbumName')
@@ -102,18 +107,23 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
 
   useEffect(() => {
     let isUpdateingList = true
+    let disposed = false
+    let generation = 0
     const updateList = (id: string) => {
-      if (currentListIdRef.current == id) return
+      if (disposed || currentListIdRef.current == id) return
+      const request = ++generation
+      setLoadError(false)
       isUpdateingList = true
       setList([])
       currentListIdRef.current = id
-      void Promise.all([getListMusics(id), getListPosition(id)]).then(([list, position]) => {
+      void Promise.all([getListMusics(id), getListPosition(id).catch(() => 0)]).then(([list, position]) => {
         requestAnimationFrame(() => {
-          if (currentListIdRef.current != id) return
+          if (disposed || request !== generation || currentListIdRef.current != id) return
           selectedListRef.current = []
           setSelectedList([])
           setList([...list])
           requestAnimationFrame(() => {
+            if (disposed || request !== generation) return
             isUpdateingList = false
             listFirstScrollRef.current = true
             if (waitJumpListPositionRef.current) {
@@ -125,24 +135,48 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
                 } catch {}
               }
             }
-            flatListRef.current?.scrollToOffset({ offset: position, animated: false })
+            flatListRef.current?.scrollToOffset({ offset: Number.isFinite(position) && position >= 0 ? position : 0, animated: false })
           })
         })
+      }).catch((error: unknown) => {
+        if (disposed || request !== generation) return
+        log.error('playlist load failed:', String(error))
+        currentListIdRef.current = ''
+        isUpdateingList = false
+        setLoadError(true)
       })
+    }
+    reloadRef.current = () => {
+      currentListIdRef.current = ''
+      updateList(listState.activeListId)
     }
     const handleChange = (ids: string[]) => {
       if (!ids.includes(listState.activeListId)) return
       const id = listState.activeListId
+      if (currentListIdRef.current != id) {
+        updateList(id)
+        return
+      }
+      const request = ++generation
       void getListMusics(id).then((list) => {
-        if (currentListIdRef.current != id) return
+        if (disposed || request !== generation || currentListIdRef.current != id) return
         selectedListRef.current = []
         setSelectedList([])
         setList([...list])
+        setLoadError(false)
+        isUpdateingList = false
+      }).catch((error: unknown) => {
+        if (disposed || request !== generation) return
+        log.error('playlist refresh failed:', String(error))
+        currentListIdRef.current = ''
+        isUpdateingList = false
+        setLoadError(true)
       })
     }
 
     const handleJumpPosition = () => {
       requestAnimationFrame(() => {
+        if (disposed) return
         const listId = playerState.playMusicInfo.listId
         if (!listId) return
         if (listId != listState.activeListId) {
@@ -163,14 +197,17 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
       if (playerState.playMusicInfo.listId) {
         waitJumpListPositionRef.current = true
         updateList(playerState.playMusicInfo.listId)
-      } else void getListPrevSelectId().then(updateList)
-    } else void getListPrevSelectId().then(updateList)
+      } else void getListPrevSelectId().catch(() => listState.activeListId).then(id => { if (!disposed && !generation) updateList(id) })
+    } else void getListPrevSelectId().catch(() => listState.activeListId).then(id => { if (!disposed && !generation) updateList(id) })
 
     global.state_event.on('mylistToggled', updateList)
     global.app_event.on('myListMusicUpdate', handleChange)
     global.app_event.on('jumpListPosition', handleJumpPosition)
 
     return () => {
+      disposed = true
+      generation++
+      reloadRef.current = () => {}
       global.state_event.off('mylistToggled', updateList)
       global.app_event.off('myListMusicUpdate', handleChange)
       global.app_event.off('jumpListPosition', handleJumpPosition)
@@ -245,7 +282,7 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
       listFirstScrollRef.current = false
       return
     }
-    void saveListPosition(listState.activeListId, nativeEvent.contentOffset.y)
+    void saveListPosition(listState.activeListId, nativeEvent.contentOffset.y).catch((error: unknown) => { log.error('playlist position save failed:', String(error)) })
   }
 
 
@@ -274,6 +311,7 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
       onScroll={handleScroll}
       style={styles.list}
       data={currentList}
+      ListFooterComponent={loadError ? <Button onPress={() => { reloadRef.current() }}><Text style={{ padding: 16, textAlign: 'center' }}>{global.i18n.t('list_error')}</Text></Button> : null}
       maxToRenderPerBatch={4}
       numColumns={rowInfo.current.rowNum}
       horizontal={false}

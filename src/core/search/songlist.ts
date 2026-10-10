@@ -17,11 +17,14 @@ export const clearListInfo: typeof searchSonglistActions.clearListInfo = (source
 }
 
 
-export const search = async(text: string, page: number, sourceId: Source): Promise<ListInfoItem[]> => {
+let requestGeneration = 0
+export const search = async(text: string, page: number, sourceId: Source, isCurrent: () => boolean = () => true): Promise<ListInfoItem[]> => {
+  const request = ++requestGeneration
+  const isStale = () => request !== requestGeneration || !isCurrent()
   const listInfo = searchSonglistState.listInfos[sourceId]!
   // if (!text) return []
   const key = `${page}__${sourceId}__${text}`
-  if (listInfo.key == key && listInfo.list.length) return listInfo.list
+  if (listInfo.key == key && listInfo.list.length && listInfo.page == page && searchSonglistState.searchText == text) return listInfo.list
   if (sourceId == 'all') {
     listInfo.key = key
     let task = []
@@ -38,18 +41,20 @@ export const search = async(text: string, page: number, sourceId: Source): Promi
       }))
     }
     return Promise.all(task).then((results: SearchResult[]) => {
-      if (key != listInfo.key) return []
+      if (isStale() || key != listInfo.key) return []
       setSearchText(text)
       setSource(sourceId)
       return setListInfo(results, page, text)
     })
   } else {
-    if (listInfo?.key == key && listInfo?.list.length) return listInfo?.list
+    if (listInfo?.key == key && listInfo?.list.length && listInfo.page == page && searchSonglistState.searchText == text) return listInfo?.list
     listInfo.key = key
     return ((musicSdk[sourceId]?.songList.search(text, page, listInfo.limit) as Promise<SearchResult>).then((data: SearchResult) => {
-      if (key != listInfo.key) return []
+      if (isStale() || key != listInfo.key) return []
+      setSearchText(text)
       return setListInfo(data, page, text)
     }) ?? Promise.reject(new Error('source not found: ' + sourceId))).catch((err: any) => {
+      if (isStale()) return []
       if (listInfo.list.length && page == 1) clearListInfo(sourceId)
       throw err
     })

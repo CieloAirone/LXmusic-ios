@@ -108,30 +108,24 @@ const handleRequestData = async(url, {
     Accept: 'application/json',
   }, headers)
   options.cache = cache
-  if (method.toLocaleLowerCase() === 'post' && !headers['Content-Type']) {
-    if (options.form) {
-      headers['Content-Type'] = 'application/x-www-form-urlencoded'
-      const formBody = []
-      for (let [key, value] of Object.entries(options.form)) {
-        let encodedKey = encodeURIComponent(key)
-        let encodedValue = encodeURIComponent(value)
-        formBody.push(`${encodedKey}=${encodedValue}`)
+  const contentTypeKey = Object.keys(headers).find(key => key.toLowerCase() === 'content-type')
+  if (options.formData) {
+    // Let React Native generate the boundary matching the actual multipart body.
+    if (contentTypeKey) delete headers[contentTypeKey]
+    const body = options.formData instanceof global.FormData ? options.formData : new global.FormData()
+    if (body !== options.formData) {
+      for (const [key, value] of Object.entries(options.formData)) {
+        body.append(key, value)
       }
-      options.body = formBody.join('&')
-      delete options.form
-    } else if (options.formData) {
-      headers['Content-Type'] = 'multipart/form-data'
-      const formBody = []
-      for (let [key, value] of Object.entries(options.form)) {
-        let encodedKey = encodeURIComponent(key)
-        let encodedValue = encodeURIComponent(value)
-        formBody.push(`${encodedKey}=${encodedValue}`)
-      }
-      options.body = options.formData
-      delete options.formData
-    } else {
-      headers['Content-Type'] = 'application/json'
     }
+    options.body = body
+    delete options.formData
+  } else if (options.form) {
+    if (!contentTypeKey) headers['Content-Type'] = 'application/x-www-form-urlencoded'
+    options.body = Object.entries(options.form).map(([key, value]) => encodeURIComponent(key) + '=' + encodeURIComponent(value)).join('&')
+    delete options.form
+  } else if (method.toLowerCase() === 'post' && !contentTypeKey) {
+    headers['Content-Type'] = 'application/json'
   }
   if (headers['Content-Type'] === 'application/json' && options.body) {
     options.body = JSON.stringify(options.body)
@@ -205,10 +199,11 @@ const fetchData = (url, { timeout = 15000, ...options }) => {
       }).catch(err => {
         // console.log(err, err.code, err.message)
         return Promise.reject(err)
-      }).finally(() => {
-        if (id == null) return
-        BackgroundTimer.clearTimeout(id)
       })
+    }).finally(() => {
+      if (id == null) return
+      BackgroundTimer.clearTimeout(id)
+      id = null
     }),
     abort() {
       controller.abort()

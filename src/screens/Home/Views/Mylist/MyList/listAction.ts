@@ -6,7 +6,6 @@ import { filterFileName, filterMusicList, formatPlayTime2, toNewMusicInfo } from
 import { handleImportListPart } from '@/screens/Home/Views/Setting/settings/Backup/actions'
 import { readMetadata, scanAudioFiles, type MusicMetadataFull } from '@/utils/localMediaMetadata'
 import settingState from '@/store/setting/state'
-import BackgroundTimer from 'react-native-background-timer'
 import { type FileType } from '@/utils/fs'
 
 export const handleRemove = (listInfo: LX.List.UserListInfo) => {
@@ -66,6 +65,7 @@ const exportList = async(listInfo: LX.List.MyListInfo, path: string) => {
     await handleSaveFile(`${path}/lx_list_part_${filterFileName(listInfo.name)}.lxmc`, data)
   } catch (error: any) {
     log.error(error.stack)
+    throw error
   }
 }
 export const handleExport = (listInfo: LX.List.MyListInfo, path: string) => {
@@ -137,7 +137,10 @@ const createLocalMusicInfos = async(filePaths: string[], errorPath: string[]): P
       filePaths.shift(),
     ].filter(Boolean) as string[]
 
-    await Promise.all(tasks.map(async path => readMetadata(path).then(info => ([path, info] as const)))).then((res) => {
+    await Promise.all(tasks.map(async path => readMetadata(path).catch((error: unknown) => {
+      log.warn('Parse local metadata failed:', path.split('/').at(-1), String(error))
+      return null
+    }).then(info => ([path, info] as const)))).then((res) => {
       for (const [path, info] of res) {
         if (!info) {
           errorPath.push(path)
@@ -150,57 +153,32 @@ const createLocalMusicInfos = async(filePaths: string[], errorPath: string[]): P
   return list
 }
 
-const createThrottleAddMusics = (add: (listId: string, musicInfos: LX.Music.MusicInfoLocal[]) => Promise<void>, remove: (listId: string, errorPath: string[]) => Promise<void>, listId: string) => {
-  let timer: number | null = null
-  let _musicInfos: LX.Music.MusicInfoLocal[] = []
-  let _errorPath: string[] = []
-  return (musicInfos: LX.Music.MusicInfoLocal[], errorPath?: string[]) => {
-    if (musicInfos.length) _musicInfos = [..._musicInfos, ...musicInfos]
-    if (errorPath) _errorPath = [..._errorPath, ...errorPath]
-    if (timer) return
-    timer = BackgroundTimer.setTimeout(async() => {
-      timer = null
-      let musicInfos = _musicInfos
-      _musicInfos = []
-      let errorPath = _errorPath
-      _errorPath = []
-      if (musicInfos.length) await add(listId, musicInfos)
-      if (errorPath.length) await remove(listId, errorPath)
-    }, 1000)
-  }
-}
-
-const handleUpdateMusics = async(filePaths: string[],
-  throttleUpdateMusics: (musicInfos: LX.Music.MusicInfoLocal[], errorPath?: string[]) => void, index: number = -1, total: number = 0, errorPath: string[] = []) => {
-  // console.log(index + 1, index + 201)
-  if (!total) total = filePaths.length
-  const paths = filePaths.slice(index + 1, index + 11)
-  const musicInfos = await createLocalMusicInfos(paths, errorPath)
-  if (musicInfos.length) throttleUpdateMusics(musicInfos)
-  index += 10
-  if (filePaths.length - 1 > index) await handleUpdateMusics(filePaths, throttleUpdateMusics, index, total, errorPath)
-  else {
-    if (errorPath.length) {
-      log.warn('Parse metadata failed:\n' + errorPath.map(p => p.split('/').at(-1)).join('\n'))
-      toast(global.i18n.t('list_select_local_file_result_failed_tip', { total, success: total - errorPath.length, failed: errorPath.length }), 'long')
-    } else {
-      toast(global.i18n.t('list_select_local_file_result_tip', { total }), 'long')
-    }
-    throttleUpdateMusics([], errorPath)
-  }
-}
 export const handleImportMediaFile = async(listInfo: LX.List.MyListInfo, path: string) => {
   setFetchingListStatus(listInfo.id, true)
-  const files = await scanAudioFiles(path)
-  if (files.length) {
-    const throttleUpdateMusics = createThrottleAddMusics(async(listId, musicInfos) => {
-      return updateListMusics(musicInfos.map(info => ({ id: listId, musicInfo: info })))
-    }, async(listId, errorPath) => {
-      return removeListMusics(listId, errorPath)
-    }, listInfo.id)
+  try {
+    const files = await scanAudioFiles(path)
+    if (!files.length) {
+      toast(global.i18n.t('list_select_local_file_empty_tip'), 'long')
+      return
+    }
     await addListMusics(listInfo.id, files.map(buildLocalMusicInfoByFilePath), settingState.setting['list.addMusicLocationType'])
     toast(global.i18n.t('list_select_local_file_temp_add_tip', { total: files.length }), 'long')
-    await handleUpdateMusics(files.map(f => f.path), throttleUpdateMusics)
-  } else toast(global.i18n.t('list_select_local_file_empty_tip'), 'long')
-  setFetchingListStatus(listInfo.id, false)
+    let failed = 0
+    // Persist bounded batches before reporting completion; a bad file is isolated.
+    for (let index = 0; index < files.length; index += 10) {
+      const errorPaths: string[] = []
+      const musicInfos = await createLocalMusicInfos(files.slice(index, index + 10).map(file => file.path), errorPaths)
+      if (musicInfos.length) await updateListMusics(musicInfos.map(musicInfo => ({ id: listInfo.id, musicInfo })))
+      if (errorPaths.length) await removeListMusics(listInfo.id, errorPaths)
+      failed += errorPaths.length
+    }
+    toast(global.i18n.t(failed ? 'list_select_local_file_result_failed_tip' : 'list_select_local_file_result_tip', {
+      total: files.length, success: files.length - failed, failed,
+    }), 'long')
+  } catch (error: unknown) {
+    log.error('Local media import failed:', String(error))
+    toast(global.i18n.t('setting_backup_part_import_list_tip_error'), 'long')
+  } finally {
+    setFetchingListStatus(listInfo.id, false)
+  }
 }

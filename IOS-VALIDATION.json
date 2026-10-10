@@ -1,23 +1,21 @@
 {
-  "status": "development-source-only; native build and feature parity incomplete",
-  "upstream_commit": "cd37a979a5845f1220b306b374285f5d38329e8d",
+  "status": "upstream-v1.9.1 plus audit fixes; native CI pending for this revision",
+  "upstream_commit": "fb8480728d875fa5e0da25eebd3a26bb71723aae",
   "checks": {
     "ios_typescript": "passed",
-    "node_tests": 7,
+    "node_tests": 34,
     "ios_release_js_bundle": "passed",
     "ios_platform_resolution": "passed",
-    "android_release_js_comparison": "passed",
+    "android_release_js_comparison": "historical check; not rerun for this revision",
     "targeted_adapter_eslint": "passed",
-    "plist_scheme_and_shell_syntax": "passed"
+    "plist_scheme_and_shell_syntax": "passed",
+    "source_eslint": "passed"
   },
   "not_run": [
-    "CocoaPods installation",
-    "Xcode native compile",
-    "native XCTest",
-    "simulator UI",
+    "native CI for this revision (queued after commit)",
+    "simulator UI walkthrough",
     "iPhone functional tests",
-    "signing",
-    "cloud workflow"
+    "signing"
   ],
   "remaining_features": [
     "embedded audio tag writeback",
@@ -27,7 +25,11 @@
     "UI screenshot comparison"
   ],
   "artifacts": {
-    "source": "LXMusic-iOS-source-dev.zip",
-    "installable_ipa": null
-  }
+    "ipa": "available only after the matching Actions run succeeds",
+    "signed": false
+  },
+  "scope_exclusions": [
+    "user-confirmed fixed: rapid silent skipping",
+    "user-confirmed fixed: duration and elapsed progress"
+  ]
 }

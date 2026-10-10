@@ -34,6 +34,10 @@ let maxTotals: Partial<Record<LX.OnlineSource, number>> = {
 
 }
 const setLists = (results: SearchResult[], page: number, text: string): ListInfoItem[] => {
+  if (page == 1) {
+    maxTotals = {}
+    for (const source of Object.keys(state.maxPages) as Source[]) state.maxPages[source] = 0
+  }
   let totals = []
   let limit = 0
   let list = []
@@ -41,10 +45,11 @@ const setLists = (results: SearchResult[], page: number, text: string): ListInfo
     list.push(...source.list)
     totals.push(source.total)
     maxTotals[source.source] = source.total
-    state.maxPages[source.source] = Math.ceil(source.total / source.limit)
+    state.maxPages[source.source] = Math.ceil(source.total / Math.max(1, source.limit))
     limit = Math.max(source.limit, limit)
   }
 
+  state.maxPages.all = Math.max(0, ...Object.entries(state.maxPages).filter(([source]) => source != 'all').map(([, pages]) => pages ?? 0))
   let listInfo = state.listInfos.all
   const total = Math.max(0, ...totals)
   if (page == 1 || (total && list.length)) listInfo.total = total
@@ -64,6 +69,7 @@ const setList = (datas: SearchResult, page: number, text: string): ListInfoItem[
   else listInfo.total = datas.limit * page
   listInfo.page = page
   listInfo.limit = datas.limit
+  state.maxPages[datas.source] = Math.ceil(listInfo.total / Math.max(1, datas.limit))
   state.source = datas.source
   return listInfo.list
 }
@@ -90,6 +96,7 @@ export default {
     listInfo.total = 0
     listInfo.list = []
     listInfo.key = null
+    state.maxPages[sourceId] = 0
     listInfo.tagId = ''
     listInfo.sortId = ''
   },

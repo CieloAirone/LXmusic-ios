@@ -8,98 +8,43 @@ export default ({ musicInfo, onUpdateTotal }: {
   musicInfo: LX.Music.MusicInfoOnline
   onUpdateTotal: (total: number) => void
 }) => {
-  // const [isLoading, setIsLoading] = useState(false)
   const listRef = useRef<ListType>(null)
-  const listInfo = useRef({ page: 1, total: 0, maxPage: 1, isEnd: false, isLoading: false, isLoadError: false })
-  const handleGetComment = async(musicInfo: LX.Music.MusicInfoOnline, page: number) => {
-    // setIsLoading(true)
-    listInfo.current.isLoading = true
-    return getNewComment(musicInfo, page, limit).then(commentInfo => {
+  const listInfo = useRef({ page: 0, maxPage: 1, loading: false, end: false })
+  const generationRef = useRef(0)
+  const load = async(page: number, append = false, refreshing = false) => {
+    const request = ++generationRef.current
+    const current = () => request === generationRef.current
+    listInfo.current.loading = true
+    if (page == 1) listInfo.current.end = false
+    listRef.current?.setStatus(refreshing ? 'refreshing' : 'loading')
+    try {
+      const { comments, maxPage, total } = await getNewComment(musicInfo, page, limit)
+      if (!current()) return
       listInfo.current.page = page
-      listInfo.current.isLoading = false
-      // setIsLoading(false)
-      if (listInfo.current.isLoadError) {
-        listInfo.current.isLoadError = false
-      }
-      return commentInfo
-    }).catch(async err => {
-      console.log(err)
-      if (err.message != '取消请求') {
-        listInfo.current.isLoading = false
-        // setIsLoading(false)
-        listInfo.current.isLoadError = true
-      }
-      throw err
-    })
-  }
-  const updateStatus = () => {
-    if (listInfo.current.isLoadError) {
-      listRef.current?.setStatus('error')
-    } else if (listInfo.current.isEnd) {
-      listRef.current?.setStatus('end')
-    } else if (!listInfo.current.isLoading) {
-      listRef.current?.setStatus('idle')
+      listInfo.current.maxPage = maxPage
+      listInfo.current.end = page >= maxPage
+      onUpdateTotal(total)
+      listRef.current?.setList(filterList(append ? [...(listRef.current?.getList() ?? []), ...comments] : comments))
+      listRef.current?.setStatus(listInfo.current.end ? 'end' : 'idle')
+    } catch {
+      if (current()) listRef.current?.setStatus('error')
+    } finally {
+      if (current()) listInfo.current.loading = false
     }
   }
   const handleListLoadMore = () => {
-    console.log('load')
-    if (listInfo.current.isLoading || listInfo.current.isEnd) return
-    const list = listRef.current?.getList() ?? []
-    const page = list.length ? listInfo.current.page + 1 : 1
-    listRef.current?.setStatus('loading')
-    void handleGetComment(musicInfo, page).then(({ comments }) => {
-      let isEnd = page >= listInfo.current.maxPage
-      if (listInfo.current.isEnd != isEnd) listInfo.current.isEnd = isEnd
-      listRef.current?.setList(filterList([...listRef.current.getList(), ...comments]))
-    }).finally(updateStatus)
+    if (listInfo.current.loading || listInfo.current.end) return
+    void load(listInfo.current.page + 1, listInfo.current.page > 0)
   }
-
-  const handleListRefresh = () => {
-    listRef.current?.setStatus('refreshing')
-    void handleGetComment(musicInfo, 1).then(({ comments, maxPage, total }) => {
-      listInfo.current.total = total
-      listInfo.current.maxPage = maxPage
-      onUpdateTotal(total)
-      let isEnd = maxPage === 1
-      if (listInfo.current.isEnd != isEnd) listInfo.current.isEnd = isEnd
-      listRef.current?.setList(filterList(comments))
-    }).finally(updateStatus)
-  }
-
-  const handleShowComment = (musicInfo: LX.Music.MusicInfoOnline) => {
-    if (!musicInfo.id || !music[musicInfo.source].comment) return
-    listInfo.current.page = 1
-    listInfo.current.total = 0
-    listInfo.current.maxPage = 1
-    listInfo.current.isEnd = false
-    listInfo.current.isLoading = false
-    listInfo.current.isLoadError = false
-    listRef.current?.setList([])
-    listRef.current?.setStatus('loading')
-    void handleGetComment(musicInfo, 1).then(({ comments, maxPage, total }) => {
-      listInfo.current.total = total
-      listInfo.current.maxPage = maxPage
-      onUpdateTotal(total)
-      let isEnd = maxPage === 1
-      if (listInfo.current.isEnd != isEnd) listInfo.current.isEnd = isEnd
-      setTimeout(() => {
-        listRef.current?.setList(filterList(comments))
-        setTimeout(updateStatus, 300)
-      }, 300)
-    })
-  }
-
+  const handleListRefresh = () => { void load(1, false, true) }
   useEffect(() => {
-    handleShowComment(musicInfo)
+    listInfo.current = { page: 0, maxPage: 1, loading: false, end: false }
+    listRef.current?.setList([])
+    if (musicInfo.id && music[musicInfo.source]?.comment) void load(1)
+    else listRef.current?.setStatus('end')
+    const generation = generationRef
+    return () => { generation.current++ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [musicInfo.id])
-
-
-  return (
-    <List
-      ref={listRef}
-      onLoadMore={handleListLoadMore}
-      onRefresh={handleListRefresh}
-    />
-  )
+  }, [musicInfo.id, musicInfo.source])
+  return <List ref={listRef} onLoadMore={handleListLoadMore} onRefresh={handleListRefresh} />
 }

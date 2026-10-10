@@ -38,10 +38,10 @@ const state: InitState = {
       sortId: '',
     },
   },
-  maxPages: {},
+  maxPages: { all: 0 },
 }
 
-export const maxPages: Partial<Record<LX.OnlineSource, number>> = {}
+export const maxPages = state.maxPages
 for (const source of music.sources) {
   if (!music[source.id as LX.OnlineSource]?.songList?.search) continue
   state.sources.push(source.id as LX.OnlineSource)

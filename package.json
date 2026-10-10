@@ -1,7 +1,7 @@
 {
   "name": "lx-music-mobile",
-  "version": "1.9.0",
-  "versionCode": 77,
+  "version": "1.9.1",
+  "versionCode": 78,
   "private": true,
   "scripts": {
     "dev": "react-native run-android --active-arch-only",
@@ -21,12 +21,12 @@
     "clear:full": "git clean -fdx -e android/keystore.properties -e android/app/*.keystore",
     "build:theme": "node src/theme/themes/createThemes.js",
     "publish": "node publish",
-    "check:ios": "tsc --noEmit -p tsconfig.ios.json && node --test scripts/ios-check.cjs",
+    "check:ios": "tsc --noEmit -p tsconfig.ios.json && node --test scripts/ios-check.cjs scripts/ios-audit-regressions.cjs",
     "bundle:ios": "node scripts/ios-bundle.cjs",
     "build:ios:simulator": "bash scripts/ios-build.sh simulator",
     "build:ios:archive": "bash scripts/ios-build.sh archive",
     "test:ios:native": "bash scripts/ios-build.sh test",
-    "postinstall": "node scripts/patch-lyric-timer.cjs"
+    "postinstall": "node scripts/patch-lyric-timer.cjs && node scripts/patch-track-player-metadata.cjs && node scripts/patch-async-storage.cjs"
   },
   "engines": {
     "node": ">= 18",

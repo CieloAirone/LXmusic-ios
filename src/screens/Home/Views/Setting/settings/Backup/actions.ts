@@ -195,6 +195,7 @@ const exportAllList = async(path: string) => {
     await handleSaveFile(path + '/lx_list.lxmc', data)
   } catch (error: any) {
     log.error(error.stack)
+    throw error
   }
 }
 export const handleExportList = (path: string) => {

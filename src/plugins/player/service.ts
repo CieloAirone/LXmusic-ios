@@ -68,7 +68,7 @@ const registerPlaybackService = async() => {
   // })
 
   TrackPlayer.addEventListener(TPEvent.PlaybackError, async(err: any) => {
-    log.error('[player native]', String(err.code ?? 'unknown'), String(err.message ?? 'Playback failed').replace(/https?:\/\/[^\s]+/g, '[URL]'))
+    log.error('[player native]', String(err.code ?? 'unknown'), String(err.message ?? err.error ?? 'Playback failed').replace(/https?:\/\/[^\s]+/g, '[URL]'))
     global.app_event.error()
     global.app_event.playerError()
   })

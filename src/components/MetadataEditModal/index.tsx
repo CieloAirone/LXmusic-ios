@@ -93,7 +93,7 @@ export default forwardRef<MetadataEditType, MetadataEditProps>((props, ref) => {
           name: _metadata.name,
           singer: _metadata.singer,
           albumName: _metadata.albumName,
-        })
+        }, true)
       }
       if (_metadata.pic != metadata.current.pic) {
         isUpdated ||= true

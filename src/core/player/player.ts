@@ -168,7 +168,7 @@ const handleRestorePlay = async(restorePlayInfo: LX.Player.SavedPlayInfo) => {
 
   void getPicPath({ musicInfo, listId: playMusicInfo.listId }).then((url: string) => {
     if (
-      musicInfo.id != playMusicInfo.musicInfo?.id ||
+      playerState.playMusicInfo !== playMusicInfo || musicInfo.id != playerState.playMusicInfo.musicInfo?.id ||
       playerState.musicInfo.pic == url ||
       playerState.loadErrorPicUrl == url
     ) return
@@ -177,7 +177,7 @@ const handleRestorePlay = async(restorePlayInfo: LX.Player.SavedPlayInfo) => {
   })
 
   void getLyricInfo({ musicInfo }).then((lyricInfo) => {
-    if (musicInfo.id != playMusicInfo.musicInfo?.id) return
+    if (playerState.playMusicInfo !== playMusicInfo || musicInfo.id != playerState.playMusicInfo.musicInfo?.id) return
     setMusicInfo({
       lrc: lyricInfo.lyric,
       tlrc: lyricInfo.tlyric,
@@ -188,7 +188,7 @@ const handleRestorePlay = async(restorePlayInfo: LX.Player.SavedPlayInfo) => {
     global.app_event.lyricUpdated()
   }).catch((err) => {
     console.log(err)
-    if (musicInfo.id != playMusicInfo.musicInfo?.id) return
+    if (playerState.playMusicInfo !== playMusicInfo || musicInfo.id != playerState.playMusicInfo.musicInfo?.id) return
     setStatusText(global.i18n.t('lyric__load_error'))
   })
 

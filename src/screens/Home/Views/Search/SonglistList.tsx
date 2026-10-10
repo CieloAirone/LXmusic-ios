@@ -1,14 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
-
+import Songlist, { type SonglistType, type SonglistProps } from '@/screens/Home/Views/SongList/components/Songlist'
 import { search } from '@/core/search/songlist'
-import Songlist, { type SonglistProps, type SonglistType } from '@/screens/Home/Views/SongList/components/Songlist'
-import searchSonglistState, { type Source } from '@/store/search/songlist/state'
-
-// export type MusicListProps = Pick<OnlineListProps,
-// 'onLoadMore'
-// | 'onPlayList'
-// | 'onRefresh'
-// >
+import searchState, { type Source } from '@/store/search/songlist/state'
 
 export interface MusicListType {
   loadList: (text: string, source: Source) => void
@@ -18,71 +11,62 @@ export default forwardRef<MusicListType, {}>((props, ref) => {
   const listRef = useRef<SonglistType>(null)
   const searchInfoRef = useRef<{ text: string, source: Source }>({ text: '', source: 'kw' })
   const isUnmountedRef = useRef(false)
+  const generationRef = useRef(0)
+  const loadingRef = useRef(false)
+  const loadPage = async(page: number, refreshing = false) => {
+    const request = ++generationRef.current
+    const current = () => !isUnmountedRef.current && request === generationRef.current
+    const { text, source } = searchInfoRef.current
+    loadingRef.current = true
+    listRef.current?.setStatus(refreshing ? 'refreshing' : 'loading')
+    try {
+      const list = await search(text, page, source, current)
+      if (!current()) return
+      const status = (searchState.maxPages[source] ?? 0) <= page ? 'end' : 'idle'
+      requestAnimationFrame(() => {
+        if (!current()) return
+        listRef.current?.setList(list, source == 'all')
+        listRef.current?.setStatus(status)
+      })
+    } catch {
+      if (current()) listRef.current?.setStatus('error')
+    } finally {
+      if (current()) loadingRef.current = false
+    }
+  }
   useImperativeHandle(ref, () => ({
     async loadList(text, source) {
-      // const listDetailInfo = searchSonglistState.listDetailInfo
-      listRef.current?.setList([], source == 'all')
-      if (searchSonglistState.searchText == text && searchSonglistState.source == source && searchSonglistState.listInfos[searchSonglistState.source]!.list.length) {
+      const request = ++generationRef.current
+      searchInfoRef.current = { text, source }
+      loadingRef.current = false
+      const info = searchState.listInfos[source]!
+      const list = info.list
+      if (searchState.searchText == text && searchState.source == source && list.length) {
+        const status = (searchState.maxPages[source] ?? 0) <= info.page ? 'end' : 'idle'
         requestAnimationFrame(() => {
-          listRef.current?.setList(searchSonglistState.listInfos[searchSonglistState.source]!.list, source == 'all')
+          if (isUnmountedRef.current || request !== generationRef.current) return
+          listRef.current?.setList(list, source == 'all')
+          listRef.current?.setStatus(status)
         })
       } else {
-        listRef.current?.setStatus('loading')
-        const page = 1
-        searchInfoRef.current.text = text
-        searchInfoRef.current.source = source
-        return search(text, page, source).then((list) => {
-          // const result = setListInfo(listDetail, id, page)
-          if (isUnmountedRef.current) return
-          requestAnimationFrame(() => {
-            listRef.current?.setList(list, source == 'all')
-            listRef.current?.setStatus(searchSonglistState.maxPages[searchSonglistState.source] == page ? 'end' : 'idle')
-          })
-        }).catch(() => {
-          listRef.current?.setStatus('error')
-        })
+        listRef.current?.setList([], source == 'all')
+        await loadPage(1)
       }
     },
   }), [])
-
   useEffect(() => {
     isUnmountedRef.current = false
+    const generation = generationRef
     return () => {
       isUnmountedRef.current = true
+      generation.current++
     }
   }, [])
-
-
-  const handleRefresh: SonglistProps['onRefresh'] = () => {
-    const page = 1
-    listRef.current?.setStatus('refreshing')
-    search(searchInfoRef.current.text, page, searchInfoRef.current.source).then((list) => {
-      // const result = setListInfo(listDetail, searchSonglistState.listDetailInfo.id, page)
-      if (isUnmountedRef.current) return
-      listRef.current?.setList(list, searchInfoRef.current.source == 'all')
-      listRef.current?.setStatus(searchSonglistState.maxPages[searchSonglistState.source] == page ? 'end' : 'idle')
-    }).catch(() => {
-      listRef.current?.setStatus('error')
-    })
-  }
+  const handleRefresh: SonglistProps['onRefresh'] = () => { void loadPage(1, true) }
   const handleLoadMore: SonglistProps['onLoadMore'] = () => {
-    listRef.current?.setStatus('loading')
-    const info = searchSonglistState.listInfos[searchInfoRef.current.source]!
-    const page = info.list.length ? info.page + 1 : 1
-    search(searchInfoRef.current.text, page, searchInfoRef.current.source).then((list) => {
-      // const result = setListInfo(listDetail, searchSonglistState.listDetailInfo.id, page)
-      if (isUnmountedRef.current) return
-      listRef.current?.setList(list, searchInfoRef.current.source == 'all')
-      listRef.current?.setStatus(searchSonglistState.maxPages[searchSonglistState.source] == page ? 'end' : 'idle')
-    }).catch(() => {
-      listRef.current?.setStatus('error')
-    })
+    if (loadingRef.current) return
+    const info = searchState.listInfos[searchInfoRef.current.source]!
+    void loadPage(info.list.length ? info.page + 1 : 1)
   }
-
-  return <Songlist
-    ref={listRef}
-    onRefresh={handleRefresh}
-    onLoadMore={handleLoadMore}
-  />
+  return <Songlist ref={listRef} onRefresh={handleRefresh} onLoadMore={handleLoadMore} />
 })
-
