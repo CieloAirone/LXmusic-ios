@@ -8,6 +8,7 @@ import { throttleBackgroundTimer } from '@/utils/tools'
 import BackgroundTimer from 'react-native-background-timer'
 import playerState from '@/store/player/state'
 import settingState from '@/store/setting/state'
+import { play as handleLrcPlay } from '@/core/lyric'
 import { onScreenStateChange } from '@/utils/nativeModules/utils'
 import { AppState } from 'react-native'
 
@@ -185,20 +186,33 @@ export default () => {
 
   onScreenStateChange(handleScreenStateChanged)
 
-  // The native layer is the source of truth for whether audio is running. A single dropped
-  // `play` event (the only trigger for the progress timer and the lyric clock) would otherwise
-  // leave the time label and the lyrics frozen for the whole song, so reconcile periodically.
+  // The progress timer is the only clock in the app: the time label, the progress bar and the
+  // lyric scroll all advance from `getCurrentTime()`, which only runs while this interval lives.
+  // Selecting a song calls `handleSetPlayInfo()` (musicToggled) -> `handlePause()`, which clears
+  // the interval, and on iOS the native `Playing` notification can arrive *before* that
+  // bookkeeping, so the timer is killed after it was started and nothing brings it back: the
+  // store still says `isPlay === true`, but the clock is dead and the UI freezes for the whole
+  // song. Watch the interval itself instead of `playerState.isPlay`, which does not track it, and
+  // ask the native player whether it is actually playing before restarting anything.
   let isReconciling = false
-  BackgroundTimer.setInterval(() => {
-    if (isReconciling || !playerState.musicInfo.id || playerState.isPlay) return
+  const handleReconcileProgress = () => {
+    // Screen off is the one case where a cleared interval is intentional; the screen-state
+    // handler restarts it on wake.
+    if (isReconciling || !isScreenOn || !playerState.musicInfo.id) return
+    if (updateTimeout != null) return
     isReconciling = true
     void TrackPlayer.getState().then(state => {
+      // Paused / stopped / buffering / ended are all distinguishable here, so a genuine pause
+      // never resurrects the timer.
       if (state != TPState.Playing) return
-      global.app_event.play()
+      startUpdateTimeout()
+      // `musicToggled` also stops the lyric clock, and `play` never fires again for this song.
+      handleLrcPlay()
     }).catch(() => {}).finally(() => {
       isReconciling = false
     })
-  }, 3000)
-  // The interval is kept for the lifetime of the app: it survives stop/play cycles so a later
-  // dropped event still recovers, and it returns immediately whenever nothing is playing.
+  }
+  BackgroundTimer.setInterval(handleReconcileProgress, 1000)
+  // The watcher is kept for the lifetime of the app: it survives stop/play cycles so a later
+  // dropped event still recovers, and it returns immediately whenever the clock is already alive.
 }

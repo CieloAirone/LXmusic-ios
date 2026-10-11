@@ -280,8 +280,9 @@ test('playback duration retries after native duration becomes available and acce
   const api = loadTS('src/core/init/player/playProgress.ts', {
     '@/core/list':{}, '@/core/player/progress':{setMaxplayTime:v=>maximum=v,setNowPlayTime:v=>position=v},
     '@/plugins/player':{getDuration:async()=>duration,getPosition:async()=>0},
+    '@/plugins/trackPlayer':{getState:async()=>'paused',State:{Playing:'playing'}},
+    '@/core/lyric':{play(){}},
     '@/utils/common':{}, '@/utils/data':{}, '@/utils/tools':{throttleBackgroundTimer:fn=>fn},
-    '@/plugins/trackPlayer':{__esModule:true,default:{getState:async()=>0},State:{Playing:2}},
     'react-native-background-timer':{setInterval:fn=>(interval=fn,1),clearInterval(){}},
     '@/store/player/state':state, '@/store/setting/state':{setting:{'player.playbackRate':1}},
     '@/utils/nativeModules/utils':{onScreenStateChange(){}},'react-native':{AppState:{addEventListener(){}}},
@@ -291,4 +292,44 @@ test('playback duration retries after native duration becomes available and acce
   assert.equal(position,0)
   duration=183;interval();await tick()
   assert.equal(maximum,183)
+})
+
+// The time label, the progress bar and the lyric scroll all advance from the single progress
+// interval. Selecting a song clears it via musicToggled, and on iOS the native Playing
+// notification can arrive first, so the interval used to die for the whole song while
+// playerState.isPlay stayed true and the isPlay-based watchdog skipped recovery.
+function progressClock(nativeState, screenOn = true) {
+  const events = {}, state = { musicInfo: { id: 'a' }, progress: { nowPlayTime: 0, maxPlayTime: 0 }, playMusicInfo: {}, playInfo: {}, isPlay: false }
+  let interval, watchdog, polls = 0, lyricRestarts = 0, position = 0, onScreen
+  loadTS('src/core/init/player/playProgress.ts', {
+    '@/core/list': {}, '@/core/player/progress': { setMaxplayTime() {}, setNowPlayTime: v => { state.progress.nowPlayTime = v; polls++ } },
+    '@/plugins/player': { getDuration: async() => 180, getPosition: async() => position },
+    '@/plugins/trackPlayer': { getState: async() => nativeState, State: { Playing: 'playing' } },
+    '@/core/lyric': { play: () => { lyricRestarts++ } },
+    '@/utils/common': {}, '@/utils/data': { savePlayInfo: async() => {} }, '@/utils/tools': { throttleBackgroundTimer: fn => fn },
+    'react-native-background-timer': { setInterval: (fn, ms) => { if (ms >= 1000) watchdog = fn; else interval = fn; return 1 }, clearInterval() { interval = null } },
+    '@/store/player/state': state, '@/store/setting/state': { setting: { 'player.playbackRate': 2 } },
+    '@/utils/nativeModules/utils': { onScreenStateChange: cb => { onScreen = cb } }, 'react-native': { AppState: { addEventListener() {} } },
+  }, { global: { app_event: { on: (key, fn) => events[key] = fn, play: () => events.play() }, state_event: { on() {} } } }).default()
+  if (!screenOn) onScreen('OFF')
+  return { state, events, fire: name => events[name](), watchdog: () => watchdog(), advance: () => { if (interval) { position += 1; interval(); return true } return false }, polls: () => polls, lyricRestarts: () => lyricRestarts }
+}
+test('progress clock restarts after a track change clears it while playback continues', async() => {
+  const clock = progressClock('playing')
+  clock.fire('play'); clock.state.isPlay = true; await tick()
+  clock.fire('musicToggled'); await tick()
+  assert.equal(clock.advance(), false)
+  clock.watchdog(); await tick(); await tick()
+  assert.equal(clock.polls(), 2, 'the watchdog restarted the interval and polled the new position')
+  assert.equal(clock.lyricRestarts(), 1, 'the lyric clock was restarted for the same song')
+})
+test('progress watchdog stays out of the way when the player is paused, stopped or off screen', async() => {
+  for (const [label, nativeState, screenOn] of [['paused', 'paused', true], ['stopped', 'stopped', true], ['off screen', 'playing', false]]) {
+    const clock = progressClock(nativeState, screenOn)
+    clock.fire('play'); clock.state.isPlay = true; await tick()
+    clock.fire('pause'); clock.state.isPlay = false; await tick()
+    clock.watchdog(); await tick(); await tick()
+    assert.equal(clock.advance(), false, `${label}: the clock must not be resurrected`)
+    assert.equal(clock.lyricRestarts(), 0, `${label}: the lyric clock must not be resurrected`)
+  }
 })
