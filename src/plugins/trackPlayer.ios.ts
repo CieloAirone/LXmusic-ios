@@ -3,6 +3,13 @@ import { NativeModules } from 'react-native'
 import { cachedURL, cacheURL, clearCache, configureCache, getCacheSize, isCached } from './player/ios/cache'
 export * from 'react-native-track-player'
 
+// The Android fork converts native milliseconds to seconds in its JS getters.
+// RNTrackPlayer.swift / SwiftAudioEx already return seconds on iOS. Bypass only
+// these three conversions; seekTo and metadata already use seconds on both sides.
+const getPosition = async(): Promise<number> => NativeModules.TrackPlayerModule.getPosition()
+const getDuration = async(): Promise<number> => NativeModules.TrackPlayerModule.getDuration()
+const getBufferedPosition = async(): Promise<number> => NativeModules.TrackPlayerModule.getBufferedPosition()
+
 let metadata: NowPlayingMetadata = {}
 const updateNowPlayingMetadata = async(value: NowPlayingMetadata, _playing: boolean) => {
   metadata = { ...metadata, ...value }
@@ -26,4 +33,4 @@ const add = async(input: Track | Track[], index?: number) => {
   }))
   await Player.add(converted, index)
 }
-export default { ...Player, setupPlayer, add, updateNowPlayingMetadata, updateNowPlayingTitles, isCached, getCacheSize, clearCache }
+export default { ...Player, setupPlayer, add, getPosition, getDuration, getBufferedPosition, updateNowPlayingMetadata, updateNowPlayingTitles, isCached, getCacheSize, clearCache }

@@ -1,6 +1,8 @@
 // Native compatibility tests for the iOS port. Run with npm run test:ios:native on macOS.
 #import <XCTest/XCTest.h>
 #import <Security/Security.h>
+#import <AVFoundation/AVFoundation.h>
+#import <math.h>
 #import <JavaScriptCore/JavaScriptCore.h>
 #import <LXPlatform/LXCrypto.h>
 #import <React/RCTBridgeModule.h>
@@ -30,9 +32,104 @@
 - (void)clearNowPlayingMetadata:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject;
 @end
 
+@protocol LXTimingBridge <NSObject>
+- (void)setupPlayer:(NSDictionary *)config resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject;
+- (void)add:(NSArray *)tracks before:(NSNumber *)index resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject;
+- (void)getDuration:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject;
+- (void)getPosition:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject;
+- (void)getBufferedPosition:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject;
+- (void)seekTo:(double)seconds resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject;
+- (void)play:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject;
+- (void)pause:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject;
+- (void)reset:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject;
+@end
+
 @interface LxMusicMobileTests : XCTestCase
 @end
 @implementation LxMusicMobileTests
+// Poll the actual RNTrackPlayer/AVPlayer instance on the main queue, without
+// substituting native values. CI runs this before permitting the IPA archive.
+- (void)waitForTimingCondition:(BOOL (^)(void))condition description:(NSString *)description {
+  XCTestExpectation *done = [self expectationWithDescription:description];
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:12];
+  __block void (^poll)(void);
+  poll = ^{
+    if (condition()) { [done fulfill]; poll = nil; return; }
+    if ([deadline timeIntervalSinceNow] <= 0) {
+      XCTFail(@"Timed out: %@", description);
+      [done fulfill]; poll = nil; return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC), dispatch_get_main_queue(), poll);
+  };
+  dispatch_async(dispatch_get_main_queue(), poll);
+  [self waitForExpectationsWithTimeout:15 handler:nil];
+}
+- (void)testNativePlaybackTimeUsesSecondsAndAdvances {
+  NSURL *url = [[NSURL fileURLWithPath:NSTemporaryDirectory()] URLByAppendingPathComponent:
+    [NSString stringWithFormat:@"lx-timing-%@.caf", NSUUID.UUID.UUIDString]];
+  AVAudioFormat *format = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:44100 channels:1];
+  AVAudioPCMBuffer *buffer = [[AVAudioPCMBuffer alloc] initWithPCMFormat:format frameCapacity:44100 * 16];
+  buffer.frameLength = buffer.frameCapacity;
+  for (AVAudioFrameCount i = 0; i < buffer.frameLength; i++) {
+    buffer.floatChannelData[0][i] = 0.02f * sin(2 * M_PI * 440 * i / 44100.0);
+  }
+  NSError *error = nil;
+  AVAudioFile *file = [[AVAudioFile alloc] initForWriting:url settings:format.settings error:&error];
+  XCTAssertNotNil(file); XCTAssertNil(error);
+  XCTAssertTrue([file writeFromBuffer:buffer error:&error]); XCTAssertNil(error);
+  file = nil; // Close the fixture before AVPlayer reads it.
+
+  RCTPromiseRejectBlock reject = ^(NSString *code, NSString *message, NSError *error) {
+    XCTFail(@"Native timing rejection: %@ %@", code, message);
+  };
+  RCTPromiseResolveBlock ignore = ^(id value) {};
+  __block id<LXTimingBridge> player;
+  XCTestExpectation *loaded = [self expectationWithDescription:@"load local timing fixture"];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    Class playerClass = NSClassFromString(@"RNTrackPlayer");
+    XCTAssertNotNil(playerClass);
+    player = [[playerClass alloc] init];
+    [player setupPlayer:@{@"autoUpdateMetadata": @NO, @"waitForBuffer": @YES} resolver:^(id value) {
+      [player add:@[@{@"id": @"timing-fixture", @"url": url.absoluteString, @"title": @"Timing fixture", @"artist": @"Test"}]
+        before:@(-1) resolver:^(id value) { [loaded fulfill]; } rejecter:reject];
+    } rejecter:reject];
+  });
+  [self waitForExpectationsWithTimeout:10 handler:nil];
+  [self waitForTimingCondition:^BOOL {
+    __block double duration = 0;
+    [player getDuration:^(id value) { duration = [value doubleValue]; } rejecter:reject];
+    return fabs(duration - 16) < 0.1;
+  } description:@"native duration is 16 seconds, not 16000 milliseconds"];
+  dispatch_async(dispatch_get_main_queue(), ^{ [player seekTo:6 resolver:ignore rejecter:reject]; });
+  [self waitForTimingCondition:^BOOL {
+    __block double position = 0;
+    [player getPosition:^(id value) { position = [value doubleValue]; } rejecter:reject];
+    return fabs(position - 6) < 0.1;
+  } description:@"native seek and position use seconds"];
+  dispatch_async(dispatch_get_main_queue(), ^{ [player play:ignore rejecter:reject]; });
+  [self waitForTimingCondition:^BOOL {
+    __block double position = 0;
+    [player getPosition:^(id value) { position = [value doubleValue]; } rejecter:reject];
+    return position > 7 && position < 12;
+  } description:@"actual audio playback advances native position"];
+  XCTestExpectation *paused = [self expectationWithDescription:@"pause preserves native position"];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [player pause:ignore rejecter:reject];
+    __block double stoppedAt = 0;
+    [player getPosition:^(id value) { stoppedAt = [value doubleValue]; } rejecter:reject];
+    [player getBufferedPosition:^(id value) {
+      XCTAssertGreaterThan([value doubleValue], 0);
+      XCTAssertLessThanOrEqual([value doubleValue], 16.1);
+    } rejecter:reject];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 350 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+      [player getPosition:^(id value) { XCTAssertEqualWithAccuracy([value doubleValue], stoppedAt, 0.15); } rejecter:reject];
+      [player reset:ignore rejecter:reject];
+      [[NSFileManager defaultManager] removeItemAtURL:url error:nil];
+      [paused fulfill];
+    });
+  });
+  [self waitForExpectationsWithTimeout:5 handler:nil];
+}
 - (void)testStorageRetainsFileWhenManifestCommitFails {
   XCTestExpectation *done = [self expectationWithDescription:@"storage rollback"];
   LXFailingStorage *storage = [LXFailingStorage new];

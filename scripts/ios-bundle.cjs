@@ -1,7 +1,7 @@
 const fs = require('node:fs')
 const { spawnSync } = require('node:child_process')
 fs.mkdirSync('build/ios-js', { recursive: true })
-const result = spawnSync(process.execPath, ['node_modules/react-native/cli.js', 'bundle', '--platform', 'ios', '--dev', 'false', '--entry-file', 'index.js', '--bundle-output', 'build/ios-js/main.jsbundle', '--assets-dest', 'build/ios-js', '--sourcemap-output', 'build/ios-js/main.jsbundle.map', '--max-workers', '2'], { stdio: 'inherit' })
+const result = spawnSync(process.execPath, ['node_modules/react-native/cli.js', 'bundle', '--platform', 'ios', '--dev', 'false', '--reset-cache', '--entry-file', 'index.js', '--bundle-output', 'build/ios-js/main.jsbundle', '--assets-dest', 'build/ios-js', '--sourcemap-output', 'build/ios-js/main.jsbundle.map', '--max-workers', '2'], { stdio: 'inherit' })
 if (result.status !== 0) process.exit(result.status ?? 1)
 const map = JSON.parse(fs.readFileSync('build/ios-js/main.jsbundle.map', 'utf8'))
 for (const suffix of ['base64.ios.js', 'fs.ios.ts', 'trackPlayer.ios.ts', 'utils.ios.ts', 'lyricDesktop.ios.ts', 'localMediaMetadata.ios.ts', 'DrawerLayoutFixed.ios.tsx']) {
