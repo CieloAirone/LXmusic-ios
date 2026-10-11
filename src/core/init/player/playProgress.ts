@@ -1,6 +1,7 @@
 import { updateListMusics } from '@/core/list'
 import { setMaxplayTime, setNowPlayTime } from '@/core/player/progress'
 import { setCurrentTime, getDuration, getPosition } from '@/plugins/player'
+import TrackPlayer, { State as TPState } from '@/plugins/trackPlayer'
 import { formatPlayTime2 } from '@/utils/common'
 import { savePlayInfo } from '@/utils/data'
 import { throttleBackgroundTimer } from '@/utils/tools'
@@ -183,4 +184,21 @@ export default () => {
   global.state_event.on('configUpdated', handleConfigUpdated)
 
   onScreenStateChange(handleScreenStateChanged)
+
+  // The native layer is the source of truth for whether audio is running. A single dropped
+  // `play` event (the only trigger for the progress timer and the lyric clock) would otherwise
+  // leave the time label and the lyrics frozen for the whole song, so reconcile periodically.
+  let isReconciling = false
+  BackgroundTimer.setInterval(() => {
+    if (isReconciling || !playerState.musicInfo.id || playerState.isPlay) return
+    isReconciling = true
+    void TrackPlayer.getState().then(state => {
+      if (state != TPState.Playing) return
+      global.app_event.play()
+    }).catch(() => {}).finally(() => {
+      isReconciling = false
+    })
+  }, 3000)
+  // The interval is kept for the lifetime of the app: it survives stop/play cycles so a later
+  // dropped event still recovers, and it returns immediately whenever nothing is playing.
 }

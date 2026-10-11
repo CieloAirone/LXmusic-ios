@@ -281,6 +281,7 @@ test('playback duration retries after native duration becomes available and acce
     '@/core/list':{}, '@/core/player/progress':{setMaxplayTime:v=>maximum=v,setNowPlayTime:v=>position=v},
     '@/plugins/player':{getDuration:async()=>duration,getPosition:async()=>0},
     '@/utils/common':{}, '@/utils/data':{}, '@/utils/tools':{throttleBackgroundTimer:fn=>fn},
+    '@/plugins/trackPlayer':{__esModule:true,default:{getState:async()=>0},State:{Playing:2}},
     'react-native-background-timer':{setInterval:fn=>(interval=fn,1),clearInterval(){}},
     '@/store/player/state':state, '@/store/setting/state':{setting:{'player.playbackRate':1}},
     '@/utils/nativeModules/utils':{onScreenStateChange(){}},'react-native':{AppState:{addEventListener(){}}},

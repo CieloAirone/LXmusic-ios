@@ -1,3 +1,4 @@
+import { AppState } from 'react-native'
 import { isActive } from '@/utils/tools'
 import { useEffect, useState } from 'react'
 import state, { type InitState } from './state'
@@ -73,7 +74,9 @@ export const useProgress = (autoUpdate = true) => {
   useEffect(() => {
     if (!autoUpdate) return
     const handleUpdate = (progress: InitState['progress']) => {
-      if (isActive()) update(progress)
+      // `AppState.currentState` can still be null during startup; that must not freeze the
+      // progress display, so only a definite background state suppresses the update.
+      if (isActive() || !AppState.currentState) update(progress)
     }
     update(state.progress)
     global.state_event.on('playProgressChanged', handleUpdate)

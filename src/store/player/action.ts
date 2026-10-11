@@ -60,7 +60,7 @@ export default {
     state.progress.nowPlayTimeStr = formatPlayTime2(currentTime)
     state.progress.maxPlayTime = totalTime
     state.progress.maxPlayTimeStr = formatPlayTime2(totalTime)
-    state.progress.progress = totalTime ? state.progress.nowPlayTime / currentTime : 0
+    state.progress.progress = totalTime ? state.progress.nowPlayTime / totalTime : 0
 
     global.state_event.playProgressChanged({ ...state.progress })
   },

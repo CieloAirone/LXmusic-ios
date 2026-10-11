@@ -78,6 +78,13 @@ const registerPlaybackService = async() => {
   })
 
   TrackPlayer.addEventListener(TPEvent.PlaybackState, async info => {
+    // `playerTrackId` is only filled in by the track-changed event, which on iOS can arrive
+    // after the first `Playing` notification. Reading it here without refreshing it would drop
+    // that notification, and the dropped event is the only trigger for `app_event.play()`,
+    // which starts both the progress timer and the lyric clock.
+    if (global.lx.playerTrackId == null || global.lx.playerTrackId === '' || isTempTrack(global.lx.playerTrackId)) {
+      global.lx.playerTrackId = (await getCurrentTrackId().catch(() => undefined)) ?? ''
+    }
     if (global.lx.gettingUrlId || isTempId()) return
     // let currentIsPlaying = false
 
