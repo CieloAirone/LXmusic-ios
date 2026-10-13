@@ -139,7 +139,17 @@ RCT_EXPORT_METHOD(fail:(NSString *)message) { self.failure = message; }
     XCTAssertGreaterThan([probe.samples.lastObject[@"position"] doubleValue], 6);
     NSLog(@"LX_LYRIC_NATIVE lockscreen=%d samples=%@ offsets=(%.1f -> %.1f, %.1f -> %.1f)",
       sending, probe.samples, firstVertical, vertical.contentOffset.y, firstHorizontal, horizontal.contentOffset.y);
-    XCTAttachment *screenshot = [XCTAttachment attachmentWithScreenshot:XCUIScreen.mainScreen.screenshot];
+    __block UIImage *image;
+    XCTestExpectation *rendered = [self expectationWithDescription:@"capture native lyric views"];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithBounds:root.bounds];
+      image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+        [root drawViewHierarchyInRect:root.bounds afterScreenUpdates:YES];
+      }];
+      [rendered fulfill];
+    });
+    [self waitForExpectationsWithTimeout:5 handler:nil];
+    XCTAttachment *screenshot = [XCTAttachment attachmentWithImage:image];
     screenshot.name = sending ? @"Lyrics scrolling with lock-screen lyrics" : @"Lyrics scrolling without lock-screen lyrics";
     screenshot.lifetime = XCTAttachmentLifetimeKeepAlways;
     [self addAttachment:screenshot];

@@ -42,7 +42,7 @@ function LyricsNativeTest({ audioURL, sending }) {
       state.playMusicInfo.isTempPlay = true
       global.app_event.musicToggled()
       // Load actual local PCM audio through the native queue; no source/API or cache involved.
-      await nativePlayer.add([{ id: state.musicInfo.id, url: audioURL, title: 'Lyric fixture' }], -1)
+      await nativePlayer.add([{ id: state.musicInfo.id, url: audioURL, title: 'Lyric fixture', artist: 'Test' }], -1)
       // Allow the real asynchronous musicToggled event to finish before lyrics arrive.
       await new Promise(resolve => setTimeout(resolve, 50))
       state.musicInfo.lrc = Array.from({ length: 30 }, (_, i) =>
