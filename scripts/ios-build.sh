@@ -22,6 +22,8 @@ common=(-workspace ios/LxMusicMobile.xcworkspace -scheme LxMusicMobile -configur
 if [[ "$mode" == simulator ]]; then
   xcodebuild "${common[@]}" -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build 2>&1 | tee build/logs/simulator.log
 elif [[ "$mode" == test ]]; then
+  mkdir -p build/ios-lyrics-test
+  node node_modules/react-native/cli.js bundle --platform ios --dev false --entry-file scripts/ios-lyrics-native.js --bundle-output build/ios-lyrics-test/lyrics.jsbundle --max-workers 2
   destination="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 16}"
   xcodebuild "${common[@]}" -destination "$destination" -resultBundlePath "build/TestResults-$(date +%s).xcresult" test 2>&1 | tee build/logs/tests.log
 else

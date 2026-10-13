@@ -21,7 +21,7 @@
     "clear:full": "git clean -fdx -e android/keystore.properties -e android/app/*.keystore",
     "build:theme": "node src/theme/themes/createThemes.js",
     "publish": "node publish",
-    "check:ios": "tsc --noEmit -p tsconfig.ios.json && node --test scripts/ios-check.cjs scripts/ios-audit-regressions.cjs scripts/ios-player-time.cjs",
+    "check:ios": "tsc --noEmit -p tsconfig.ios.json && node --test scripts/ios-check.cjs scripts/ios-audit-regressions.cjs scripts/ios-player-time.cjs scripts/ios-lyrics.cjs",
     "bundle:ios": "node scripts/ios-bundle.cjs",
     "build:ios:simulator": "bash scripts/ios-build.sh simulator",
     "build:ios:archive": "bash scripts/ios-build.sh archive",
@@ -95,6 +95,7 @@
     "eslint-config-standard-with-typescript": "^43.0.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^5.2.0",
+    "react-test-renderer": "18.2.0",
     "typescript": "^5.9.3",
     "yoga-layout": "3.2.1"
   },

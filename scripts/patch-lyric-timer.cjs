@@ -4,7 +4,7 @@ const root = path.dirname(require.resolve('lrc-file-parser/package.json'))
 for (const name of ['lrc-file-parser.js', 'lrc-file-parser.esm.js']) {
   const file = path.join(root, 'dist', name)
   let source = fs.readFileSync(file, 'utf8')
-  if (source.includes('LX_TIMER_GENERATION')) continue
+  if (source.includes('LX_TIMER_PER_INSTANCE')) continue
   const start = source.indexOf('const timeoutTools = {', source.indexOf('const noop'))
   const end = source.indexOf('\nconst t_rxp_1', start)
   if (start < 0 || end < 0) throw Error('Unsupported lyric timer version')
@@ -43,5 +43,18 @@ for (const name of ['lrc-file-parser.js', 'lrc-file-parser.esm.js']) {
     },
 };
 ` + source.slice(end)
+  // iOS creates a second parser for lock-screen titles. A module-wide timer lets
+  // its play/pause/setLyric cancel the foreground parser's next-line callback.
+  // Keep the methods on a shared prototype, but all mutable state on each player.
+  const classStart = source.indexOf('class Lyric {')
+  if (classStart < 0) throw Error('Unsupported lyric parser class')
+  const classSource = source.slice(classStart)
+  if ((classSource.match(/timeoutTools\.start\(/g) ?? []).length !== 1 ||
+      (classSource.match(/timeoutTools\.clear\(/g) ?? []).length !== 1) {
+    throw Error('Unsupported lyric parser timer calls')
+  }
+  source = source.slice(0, classStart) + classSource
+    .replace('class Lyric {', 'class Lyric {\n    // LX_TIMER_PER_INSTANCE\n    _timeoutTools = Object.create(timeoutTools);')
+    .replace(/\btimeoutTools\.(start|clear)\(/g, 'this._timeoutTools.$1(')
   fs.writeFileSync(file, source)
 }

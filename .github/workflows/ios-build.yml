@@ -13,10 +13,17 @@ on:
       run_native_tests:
         type: boolean
         default: false
+      validation_only:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       run_native_tests:
         description: '同时运行模拟器原生测试（耗时更长）'
+        type: boolean
+        default: false
+      validation_only:
+        description: '仅验证，不打包 IPA；验证完成后另行构建'
         type: boolean
         default: false
 permissions:
@@ -67,10 +74,12 @@ jobs:
           IOS_SKIP_PREPARE: '1'
         run: bash scripts/ios-build.sh test
       - name: Build unsigned IPA
+        if: ${{ !inputs.validation_only }}
         env:
           IOS_SKIP_PREPARE: '1'
         run: bash scripts/ios-build.sh archive
       - name: Upload IPA
+        if: ${{ !inputs.validation_only }}
         uses: actions/upload-artifact@v6
         with:
           name: LXMusic-iOS-unsigned-${{ github.run_number }}
@@ -91,7 +100,10 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
       - name: Build summary
-        if: ${{ success() }}
+        if: ${{ success() && !inputs.validation_only }}
         run: |
           echo '### IPA 已构建' >> "$GITHUB_STEP_SUMMARY"
           echo '在本次运行页面的 Artifacts 下载 LXMusic-iOS-unsigned。解压后得到 IPA；它未签名，需要自行签名后安装。' >> "$GITHUB_STEP_SUMMARY"
+      - name: Validation summary
+        if: ${{ success() && inputs.validation_only }}
+        run: echo '验证完成，本次未构建或发布 IPA。请检查测试结果后另行构建。' >> "$GITHUB_STEP_SUMMARY"

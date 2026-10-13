@@ -6,6 +6,8 @@
 #import <JavaScriptCore/JavaScriptCore.h>
 #import <LXPlatform/LXCrypto.h>
 #import <React/RCTBridgeModule.h>
+#import <React/RCTBridge.h>
+#import <React/RCTRootView.h>
 #import <RNCAsyncStorage/RNCAsyncStorage.h>
 
 @interface RNCAsyncStorage (LXTestPrivate)
@@ -44,9 +46,116 @@
 - (void)reset:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject;
 @end
 
+// Only linked into XCTest. Records actual JS parser callbacks; UIScrollView
+// assertions below independently verify that native list offsets really move.
+@interface LXLyricTestProbe : NSObject <RCTBridgeModule>
+@property(nonatomic, strong) NSMutableArray<NSDictionary *> *samples;
+@property(nonatomic, copy) NSString *failure;
+@end
+@implementation LXLyricTestProbe
+RCT_EXPORT_MODULE(LXLyricTestProbe)
++ (BOOL)requiresMainQueueSetup { return YES; }
+- (dispatch_queue_t)methodQueue { return dispatch_get_main_queue(); }
+RCT_EXPORT_METHOD(record:(double)line text:(NSString *)text position:(double)position) {
+  if (!self.samples) self.samples = [NSMutableArray new];
+  [self.samples addObject:@{@"line": @(line), @"text": text ?: @"", @"position": @(position)}];
+}
+RCT_EXPORT_METHOD(fail:(NSString *)message) { self.failure = message; }
+@end
+
 @interface LxMusicMobileTests : XCTestCase
 @end
 @implementation LxMusicMobileTests
+- (UIView *)viewWithIdentifier:(NSString *)identifier inView:(UIView *)view {
+  if ([view.accessibilityIdentifier isEqualToString:identifier]) return view;
+  for (UIView *child in view.subviews) {
+    UIView *match = [self viewWithIdentifier:identifier inView:child];
+    if (match) return match;
+  }
+  return nil;
+}
+- (UIScrollView *)scrollInView:(UIView *)view {
+  if ([view isKindOfClass:UIScrollView.class]) return (UIScrollView *)view;
+  for (UIView *child in view.subviews) {
+    UIScrollView *match = [self scrollInView:child];
+    if (match) return match;
+  }
+  return nil;
+}
+- (void)verifyLyricScrollingWithLockScreen:(BOOL)sending {
+  NSURL *bundleURL = [[NSBundle bundleForClass:self.class] URLForResource:@"lyrics" withExtension:@"jsbundle"];
+  XCTAssertNotNil(bundleURL);
+  if (!bundleURL) return;
+  NSURL *audioURL = [[NSURL fileURLWithPath:NSTemporaryDirectory()] URLByAppendingPathComponent:
+    [NSString stringWithFormat:@"lx-lyrics-%@.caf", NSUUID.UUID.UUIDString]];
+  AVAudioFormat *format = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:44100 channels:1];
+  AVAudioPCMBuffer *audio = [[AVAudioPCMBuffer alloc] initWithPCMFormat:format frameCapacity:44100 * 30];
+  audio.frameLength = audio.frameCapacity;
+  for (AVAudioFrameCount i = 0; i < audio.frameLength; i++) audio.floatChannelData[0][i] = 0.01f * sin(2 * M_PI * 440 * i / 44100.0);
+  NSError *error = nil;
+  AVAudioFile *file = [[AVAudioFile alloc] initForWriting:audioURL settings:format.settings error:&error];
+  XCTAssertNotNil(file); XCTAssertNil(error);
+  XCTAssertTrue([file writeFromBuffer:audio error:&error]); XCTAssertNil(error);
+  file = nil;
+  __block RCTBridge *bridge;
+  __block RCTRootView *root;
+  __block UIWindow *window;
+  __block UIScrollView *vertical, *horizontal;
+  LXLyricTestProbe *probe = [LXLyricTestProbe new];
+  XCTestExpectation *mounted = [self expectationWithDescription:@"mount actual lyric pages"];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    bridge = [[RCTBridge alloc] initWithBundleURL:bundleURL moduleProvider:^NSArray<id<RCTBridgeModule>> *{ return @[probe]; } launchOptions:nil];
+    root = [[RCTRootView alloc] initWithBridge:bridge moduleName:@"LXLyricsNativeTest"
+      initialProperties:@{@"audioURL": audioURL.absoluteString, @"sending": @(sending)}];
+    window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
+    window.rootViewController = [UIViewController new];
+    window.rootViewController.view = root;
+    [window makeKeyAndVisible];
+    [mounted fulfill];
+  });
+  [self waitForExpectationsWithTimeout:5 handler:nil];
+  @try {
+    [self waitForTimingCondition:^BOOL {
+      vertical = [self scrollInView:[self viewWithIdentifier:@"vertical-lyrics-test" inView:root]];
+      horizontal = [self scrollInView:[self viewWithIdentifier:@"horizontal-lyrics-test" inView:root]];
+      return probe.failure != nil || (vertical.bounds.size.height > 0 && horizontal.bounds.size.height > 0 &&
+        [probe.samples.lastObject[@"position"] doubleValue] >= 2);
+    } description:@"real audio and lyric callbacks start"];
+    XCTAssertNil(probe.failure, @"%@", probe.failure);
+    if (probe.failure || !vertical || !horizontal) return;
+    __block CGFloat firstVertical, firstHorizontal;
+    XCTestExpectation *captured = [self expectationWithDescription:@"capture initial native offsets"];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      firstVertical = vertical.contentOffset.y; firstHorizontal = horizontal.contentOffset.y;
+      [captured fulfill];
+    });
+    [self waitForExpectationsWithTimeout:5 handler:nil];
+    [self waitForTimingCondition:^BOOL {
+      return probe.failure != nil || ([probe.samples.lastObject[@"line"] integerValue] >= 7 &&
+        vertical.contentOffset.y > firstVertical + 100 && horizontal.contentOffset.y > firstHorizontal + 100);
+    } description:@"both actual native lyric lists scroll more than 100 points"];
+    XCTAssertNil(probe.failure, @"%@", probe.failure);
+    XCTAssertGreaterThanOrEqual([probe.samples.lastObject[@"line"] integerValue], 7);
+    XCTAssertGreaterThan([probe.samples.lastObject[@"position"] doubleValue], 6);
+    NSLog(@"LX_LYRIC_NATIVE lockscreen=%d samples=%@ offsets=(%.1f -> %.1f, %.1f -> %.1f)",
+      sending, probe.samples, firstVertical, vertical.contentOffset.y, firstHorizontal, horizontal.contentOffset.y);
+    XCTAttachment *screenshot = [XCTAttachment attachmentWithScreenshot:XCUIScreen.mainScreen.screenshot];
+    screenshot.name = sending ? @"Lyrics scrolling with lock-screen lyrics" : @"Lyrics scrolling without lock-screen lyrics";
+    screenshot.lifetime = XCTAttachmentLifetimeKeepAlways;
+    [self addAttachment:screenshot];
+  } @finally {
+    XCTestExpectation *closed = [self expectationWithDescription:@"release lyric test bridge"];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [root removeFromSuperview]; window.hidden = YES; window.rootViewController = nil;
+      [bridge invalidate]; root = nil; bridge = nil; window = nil;
+      [closed fulfill];
+    });
+    [self waitForExpectationsWithTimeout:5 handler:nil];
+    [[NSFileManager defaultManager] removeItemAtURL:audioURL error:nil];
+  }
+}
+- (void)testActualLyricListsScrollWithLockScreenDisabled { [self verifyLyricScrollingWithLockScreen:NO]; }
+- (void)testActualLyricListsScrollWithLockScreenEnabled { [self verifyLyricScrollingWithLockScreen:YES]; }
 // Poll the actual RNTrackPlayer/AVPlayer instance on the main queue, without
 // substituting native values. CI runs this before permitting the IPA archive.
 - (void)waitForTimingCondition:(BOOL (^)(void))condition description:(NSString *)description {
